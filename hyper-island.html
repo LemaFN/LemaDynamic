@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hyper Island – Dynamic-Island-Klon</title>
+<style>
+:root{--fg:#111;--mu:#5b6070;--cd:rgba(255,255,255,.82);--bd:rgba(0,0,0,.08);--wp:radial-gradient(at 15% 0%,#7b2ff7,transparent 55%),radial-gradient(at 95% 8%,#00c6ff,transparent 50%),#0b1020;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--fg:#f2f2f7;--mu:#9aa0b4;--cd:rgba(22,24,34,.78);--bd:rgba(255,255,255,.1)}}
+:root[data-theme=dark]{--fg:#f2f2f7;--mu:#9aa0b4;--cd:rgba(22,24,34,.78);--bd:rgba(255,255,255,.1)}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;display:flex;flex-direction:column;font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--fg);background:var(--wp);background-attachment:fixed}
+.stage{flex:none;height:150px;position:relative;z-index:5}
+.hint{position:absolute;bottom:6px;left:0;right:0;text-align:center;margin:0;font-size:12px;color:rgba(255,255,255,.65)}
+.panel{flex:1;overflow:auto;padding:8px 14px 24px;-webkit-overflow-scrolling:touch}
+h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin:10px 4px 8px}
+.cd{background:var(--cd);border:1px solid var(--bd);border-radius:20px;padding:4px 14px;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.cd label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bd)}
+.cd label:last-child{border:0}.cd input[type=range]{width:50%}.cd select{font:inherit;background:transparent;color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:4px}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.g button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border:1px solid var(--bd);border-radius:16px;background:var(--cd);color:var(--fg);font:inherit;font-size:13px;cursor:pointer;transition:transform .15s}
+.g button:active{transform:scale(.95)}.ft{font-size:12px;color:var(--mu);text-align:center}
+#isl{position:absolute;left:50%;top:12px;width:126px;height:36px;border-radius:18px;background:#000;color:#fff;overflow:hidden;transform:translateX(calc(-50% + var(--x,0px))) scale(calc(var(--s,1)*var(--p,1)));transform-origin:50% 0;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:var(--is,none),0 6px 34px -4px var(--g,transparent);transition:width var(--d) var(--e),height var(--d) var(--e),border-radius var(--d) var(--e),box-shadow .4s,background .4s,opacity .2s,transform .25s ease}
+#isl.nt{top:0}#isl.dn{--p:.95}.nx{transition:none!important}
+#isl.on{animation:pul 2.6s ease-in-out infinite}
+@keyframes pul{50%{box-shadow:var(--is,none),0 6px 48px 2px var(--g,transparent)}}
+#isl.gs,#sec.gs{--is:inset 0 0 0 1px rgba(255,255,255,.2),inset 0 1px 0 rgba(255,255,255,.35);background:rgba(8,10,16,.5);-webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7)}
+#isl::after{content:"";position:absolute;left:calc(50% + 10px);top:11px;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#2a3550,#0a0d16 60%);transition:opacity .2s}
+#isl.ex::after{opacity:0}
+#in{position:absolute;top:0;left:50%;transform:translateX(-50%);transition:opacity .18s,filter .18s}
+#in.h{opacity:0;filter:blur(8px)}
+#sec{position:absolute;left:50%;top:12px;width:36px;height:36px;padding:0;border:0;border-radius:50%;background:#000;display:grid;place-items:center;transform-origin:0 0;opacity:0;pointer-events:none;cursor:pointer;z-index:5;transition:transform var(--d) var(--e),opacity .25s}
+.cm{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 14px 0 12px}
+.xp{padding:16px 18px}.rw{display:flex;align-items:center;gap:12px}.rw+.rw,.rw+.pb,.pb+.rw{margin-top:12px}.fx{flex:1;min-width:0}
+.t1{font-weight:600;font-size:15px}.t2{color:#a8a8b0;font-size:13px}.tn{font:600 14px system-ui;font-variant-numeric:tabular-nums}
+.big{font:600 40px/1 system-ui;font-variant-numeric:tabular-nums}.big2{font:700 24px/1.1 system-ui;font-variant-numeric:tabular-nums}
+.bt{flex:1;border:0;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;height:42px;padding:0 14px;font:600 14px system-ui;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.bt.g{background:#30d158;color:#000}.bt.r{background:#ff453a}.bt:active{filter:brightness(1.3)}
+.sb{justify-content:space-between;margin-top:4px!important}.bs{justify-content:space-between;font-size:13px;color:#d0d0d6}.bs span{background:rgba(255,255,255,.1);padding:6px 10px;border-radius:12px}
+.art{display:block;border-radius:8px;flex:none}
+.av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#5e9bff,#bf5af2);display:grid;place-items:center;font:700 18px system-ui;font-style:normal;flex:none}
+.sq{width:48px;height:48px;border-radius:14px;background:#0a84ff;display:grid;place-items:center;flex:none;font-style:normal}.sq.ok{background:#30d158;animation:pop .6s var(--e)}
+@keyframes pop{from{transform:scale(0)}}
+.pb{height:5px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}.pb i{display:block;height:100%;background:#fff;border-radius:3px;width:0;transition:width 1s linear}
+.wv{display:flex;gap:2px;align-items:center;height:16px}.wv i{width:3px;height:100%;border-radius:2px;background:var(--c);animation:wv .9s ease-in-out infinite}
+.wv i:nth-child(2){animation-delay:-.3s}.wv i:nth-child(3){animation-delay:-.6s}.wv i:nth-child(4){animation-delay:-.15s}
+@keyframes wv{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}.pz .wv i{animation-play-state:paused}
+.rg{display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:conic-gradient(#32d74b calc(var(--p,0)*1%),rgba(255,255,255,.16) 0);flex:none}
+.rg b{width:46px;height:46px;border-radius:50%;background:#000;display:grid;place-items:center;font:600 14px system-ui}
+.dot{width:10px;height:10px;border-radius:50%;background:#ff453a;animation:bl 1s infinite}@keyframes bl{50%{opacity:.25}}
+</style></head><body>
+<div class="stage"><div id="isl"><div id="in"></div></div><button id="sec" aria-label="Zweite Aktivität"></button><p class="hint">Tippen · lang drücken · wischen</p></div>
+<main class="panel">
+<h2>Aktivitäten</h2><div class="g" id="g"></div>
+<h2>Einstellungen</h2>
+<div class="cd" id="set">
+<label>Größe<input type="range" id="sc" min=".8" max="1.5" step=".05"></label>
+<label>Rundung (offen)<input type="range" id="rd" min="18" max="44"></label>
+<label>Federhärte<input type="range" id="sp" min="80" max="420"></label>
+<label>Auto-Einklappen (s)<input type="range" id="ac" min="2" max="15"></label>
+<label>Glas-Look<input type="checkbox" id="gs"></label>
+<label>Glow in Aktivitätsfarbe<input type="checkbox" id="gl"></label>
+<label>Notch statt Pille<input type="checkbox" id="nt"></label>
+<label>Haptik<input type="checkbox" id="hp"></label>
+<label>Hintergrund<select id="wp"><option value="0">Aurora</option><option value="1">Sunset</option><option value="2">Wald</option><option value="3">Nacht</option></select></label>
+<label>Design<select id="th"><option value="auto">System</option><option value="light">Hell</option><option value="dark">Dunkel</option></select></label>
+</div>
+<p class="ft">Tasten 1–9, 0 starten Aktivitäten · Esc klappt ein</p>
+</main>
+<script>
+const $=s=>document.querySelector(s),R=document.documentElement,isl=$('#isl'),box=$('#in'),sec=$('#sec');
+const P={phone:'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z',music:'M9 18V5l12-2v13M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',timer:'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2 2M9 2h6',bolt:'M13 2 3 14h9l-1 8 10-12h-9z',buds:'M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z',nav:'M15 14l5-5-5-5M4 20v-7a4 4 0 0 1 4-4h12',deliv:'M3 13l2-6h14l2 6v5h-3v-2H6v2H3zM3 13h18',msg:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',bell:'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a2 2 0 0 0 3.4 0',mute:'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a2 2 0 0 0 3.4 0M3 3l18 18',mic:'M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3',spk:'M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14',check:'M20 6 9 17l-5-5',lock:'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',unl:'M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.7-1.5',play:'M7 4v16l13-8z',pause:'M6 4h4v16H6zM14 4h4v16h-4z',prev:'M19 20 9 12l10-8zM5 19V5',next:'M5 4l10 8-10 8zM19 5v14',x:'M18 6 6 18M6 6l12 12'};
+const I=(n,s=18,c='currentColor')=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="${/^(play|pause|prev|next)$/.test(n)?'currentColor':'none'}" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="${P[n]}"/></svg>`;
+const fm=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+const TR=[{t:'Neon Horizon',a:'Lema Beats',g:'#ff5f6d,#7b2ff7'},{t:'Midnight Drive',a:'Synthwave Co.',g:'#00c6ff,#0072ff'},{t:'Pixel Rain',a:'Chiptune Club',g:'#f7971e,#ffd200'}],L=215;
+const NV=['Rechts auf Musterstraße','Links auf Hauptstraße','Kreisverkehr, 2. Ausfahrt'];
+const art=(a,s)=>`<i class="art" style="width:${s}px;height:${s}px;background:linear-gradient(135deg,${TR[a.i].g})"></i>`;
+const wv=c=>`<s class="wv" style="--c:${c};text-decoration:none"><i></i><i></i><i></i><i></i></s>`;
+const T={
+music:{p:5,c:'#fa2d55',ic:'music',h:180,cm:a=>[art(a,24),wv('#fa2d55')],ex:a=>`<div class="rw">${art(a,56)}<div class="fx"><div class="t1">${TR[a.i].t}</div><div class="t2">${TR[a.i].a}</div></div>${wv('#fa2d55')}</div><div class="pb"><i data-k="pg"></i></div><div class="rw sb"><span class="t2" data-k="pt"></span><span class="t2">${fm(L)}</span></div><div class="rw"><button class="bt" data-a="pv">${I('prev',20)}</button><button class="bt" data-a="pl">${I(a.on?'pause':'play',22)}</button><button class="bt" data-a="nx">${I('next',20)}</button></div>`},
+timer:{p:6,c:'#ff9f0a',ic:'timer',h:150,cm:a=>[I('timer',18,'#ff9f0a'),`<b class="tn" data-k="tm" style="color:#ff9f0a"></b>`],ex:a=>`<div class="rw"><div class="fx"><div class="t2" style="color:#ff9f0a">Timer</div><div class="big" data-k="tm" style="color:#ff9f0a"></div></div>${I('timer',34,'#ff9f0a')}</div><div class="rw"><button class="bt" data-a="tp">+1 Min</button><button class="bt r" data-a="ts">Stopp</button></div>`},
+call:{p:9,c:'#30d158',ic:'phone',h:150,cm:a=>a.s=='in'?[`<i class="av" style="width:24px;height:24px;font-size:12px">M</i>`,`<span class="t2">Mama</span>`]:[I('phone',18,'#30d158'),`<b class="tn" data-k="cl" style="color:#30d158"></b>`],ex:a=>a.s=='in'?`<div class="rw"><i class="av">M</i><div class="fx"><div class="t1">Mama</div><div class="t2">Eingehender Anruf…</div></div></div><div class="rw"><button class="bt r" data-a="dc">${I('x')}Ablehnen</button><button class="bt g" data-a="ac">${I('phone')}Annehmen</button></div>`:`<div class="rw"><i class="av">M</i><div class="fx"><div class="t1">Mama</div><div class="t2" data-k="cl"></div></div></div><div class="rw"><button class="bt" data-a="mu" style="${a.m?'background:#fff;color:#000':''}">${I('mic')}</button><button class="bt" data-a="sp" style="${a.sp?'background:#fff;color:#000':''}">${I('spk')}</button><button class="bt r" data-a="dc">${I('phone')}</button></div>`},
+chg:{p:3,c:'#32d74b',ic:'bolt',h:92,cm:a=>[I('bolt',18,'#32d74b'),`<b class="tn" data-k="bp" style="color:#32d74b"></b>`],ex:a=>`<div class="rw"><i class="rg" data-k="br"><b data-k="bp"></b></i><div class="fx"><div class="t1">Lädt</div><div class="t2">Schnellladen</div></div>${I('bolt',26,'#32d74b')}</div>`},
+buds:{p:10,c:'#0a84ff',ic:'buds',h:104,ax:1,tr:5500,cm:a=>[I('buds',18,'#0a84ff'),`<span class="t2">82 %</span>`],ex:a=>`<div class="rw">${I('buds',34,'#0a84ff')}<div class="fx"><div class="t1">AirPods Pro</div><div class="t2">Verbunden</div></div></div><div class="rw bs"><span>L 82 %</span><span>R 80 %</span><span>Etui 64 %</span></div>`},
+nav:{p:7,c:'#30d158',ic:'nav',h:128,cm:a=>[I('nav',20,'#30d158'),`<b class="tn" data-k="nd" style="color:#30d158"></b>`],ex:a=>`<div class="rw"><i class="sq" style="background:#30d158">${I('nav',26,'#000')}</i><div class="fx"><div class="big2" data-k="nd"></div><div class="t1">${NV[a.i]}</div></div></div><div class="rw sb t2"><span>Ankunft 18:42</span><span>12 Min · 4,2 km</span></div>`},
+deliv:{p:4,c:'#bf5af2',ic:'deliv',h:112,cm:a=>[I('deliv',18,'#bf5af2'),`<b class="tn" data-k="dm" style="color:#bf5af2"></b>`],ex:a=>`<div class="rw">${I('deliv',30,'#bf5af2')}<div class="fx"><div class="t1">Pizza Lema</div><div class="t2">Fahrer ist unterwegs</div></div><b data-k="dm" style="color:#bf5af2"></b></div><div class="pb"><i data-k="dp" style="background:#bf5af2"></i></div>`},
+rec:{p:8,c:'#ff453a',ic:'mic',h:104,cm:a=>[`<i class="dot"></i>`,`<b class="tn" data-k="rc" style="color:#ff453a"></b>`],ex:a=>`<div class="rw">${I('mic',30,'#ff453a')}<div class="fx"><div class="t1">Aufnahme läuft</div><div class="t2" data-k="rc"></div></div><button class="bt r" data-a="rs" style="flex:none">Stopp</button></div>`},
+msg:{p:10,c:'#5e9bff',ic:'msg',h:116,ax:1,tr:6000,cm:a=>[I(a.ic||'msg',18,'#5e9bff'),`<span class="t2">${a.n}</span>`],ex:a=>`<div class="rw"><i class="av">${a.n[0]}</i><div class="fx"><div class="t1">${a.n}</div><div class="t2">${a.rp?'Antwort gesendet ✓':a.tx}</div></div></div>${a.rp?'':`<div class="rw"><button class="bt" data-a="rp">${I('msg',16)}Antworten</button></div>`}`},
+sil:{p:10,c:'#ff9f0a',ic:'bell',tr:2200,cm:a=>[I(a.m?'mute':'bell',18,'#ff9f0a'),`<span class="t2">${a.m?'Lautlos':'Klingeln'}</span>`]},
+pay:{p:10,c:'#30d158',ic:'check',h:100,ax:1,tr:3800,cm:a=>[I('check',18,'#30d158'),`<span class="t2">12,90 €</span>`],ex:a=>`<div class="rw"><i class="sq ok">${I('check',26,'#000')}</i><div class="fx"><div class="t1">Bezahlt</div><div class="t2">12,90 € · Café Lema</div></div></div>`},
+unl:{p:10,c:'#ffffff',ic:'lock',tr:1700,cm:a=>[I('unl',18),`<span class="t2">Entsperrt</span>`]}};
+const LB={music:'Musik',timer:'Timer',call:'Anruf',chg:'Laden',buds:'AirPods',nav:'Navigation',deliv:'Lieferung',rec:'Aufnahme',msg:'Nachricht',sil:'Lautlos',pay:'Bezahlt',unl:'Entsperrt'};
+const DF={music:()=>({i:0,pos:30,on:1}),timer:()=>({left:90}),call:()=>({s:'in',sec:0}),chg:()=>({p:62}),buds:()=>({}),nav:()=>({d:300,i:0}),deliv:()=>({p:.25}),rec:()=>({sec:0}),msg:()=>({n:'Lena',tx:'Kommst du heute zum Server-Treff? 🎮'}),sil:()=>({m:1}),pay:()=>({}),unl:()=>({})};
+const WP=['radial-gradient(at 15% 0%,#7b2ff7,transparent 55%),radial-gradient(at 95% 8%,#00c6ff,transparent 50%),#0b1020','radial-gradient(at 10% 0%,#ff5f6d,transparent 55%),radial-gradient(at 95% 10%,#ffc371,transparent 50%),#1a0b14','radial-gradient(at 20% 0%,#11998e,transparent 55%),radial-gradient(at 90% 5%,#38ef7d,transparent 45%),#06140f','#05060a'];
+const load=()=>{try{return JSON.parse(localStorage.getItem('dhi'))||{}}catch{return{}}},save=()=>{try{localStorage.setItem('dhi',JSON.stringify(S))}catch{}};
+const S=Object.assign({sc:1,rd:34,sp:170,ac:5,gs:0,gl:1,nt:0,hp:1,wp:0,th:'auto'},load());
+const A={},ord=[],tm={},dm=[];let st='idle',pn=null,sig='',sw,cT,mut=0;
+const hap=()=>{try{S.hp&&navigator.vibrate&&navigator.vibrate(10)}catch{}};
+const pri=()=>[...ord].sort((a,b)=>T[b].p+(b==pn?20:0)-T[a].p-(a==pn?20:0)||ord.indexOf(b)-ord.indexOf(a));
+function spr(k){const c=1.1*Math.sqrt(k),W=9/Math.sqrt(k),n=48,o=[0],dt=W/n/8;let x=0,v=0;for(let i=0;i<n;i++){for(let j=0;j<8;j++){v+=(k*(1-x)-c*v)*dt;x+=v*dt}o.push(+x.toFixed(3))}o[n]=1;return{e:`linear(${o})`,d:W}}
+function apply(){const ok=CSS.supports('transition-timing-function','linear(0,1)'),s=spr(S.sp),r=R.style;
+r.setProperty('--e',ok?s.e:'cubic-bezier(.34,1.45,.5,1)');r.setProperty('--d',(ok?s.d:.55)+'s');r.setProperty('--s',S.sc);r.setProperty('--wp',WP[S.wp]||WP[0]);
+S.th=='auto'?R.removeAttribute('data-theme'):R.setAttribute('data-theme',S.th);
+[isl,sec].forEach(e=>e.classList.toggle('gs',!!S.gs));isl.classList.toggle('nt',!!S.nt)}
+const K={tm:e=>e.textContent=fm(A.timer.left),cl:e=>e.textContent=fm(A.call.sec),rc:e=>e.textContent=fm(A.rec.sec),pg:e=>e.style.width=A.music.pos/L*100+'%',pt:e=>e.textContent=fm(A.music.pos),bp:e=>e.textContent=Math.round(A.chg.p)+' %',br:e=>e.style.setProperty('--p',A.chg.p),nd:e=>e.textContent=Math.max(10,Math.round(A.nav.d/10)*10)+' m',dp:e=>e.style.width=A.deliv.p*100+'%',dm:e=>e.textContent=Math.max(1,Math.ceil(12*(1-A.deliv.p)))+' Min'};
+const upd=()=>document.querySelectorAll('[data-k]').forEach(e=>{try{K[e.dataset.k](e)}catch{}});
+function go(f){if(f)sig='';const q=pri(),a=q[0],b=q[1];if(!a)st='idle';
+const t=a&&T[a],mx=Math.min(372,(innerWidth-24)/S.sc);let w=126,h=36,r=18,html='';
+if(a&&st=='cmp'){w=Math.min(236,mx);const c=t.cm(A[a]);html=`<div class="cm">${c[0]}${c[1]}</div>`}
+if(a&&st=='exp'){w=mx;h=t.h;r=S.rd;html=`<div class="xp">${t.ex(A[a])}</div>`}
+const s=[a,st,a&&A[a].v].join();
+if(s!==sig){sig=s;box.classList.add('h');clearTimeout(sw);sw=setTimeout(()=>{box.innerHTML=html;box.style.width=w+'px';box.classList.remove('h');upd()},html?100:0)}else box.style.width=w+'px';
+isl.style.width=w+'px';isl.style.height=h+'px';isl.style.borderRadius=S.nt?`0 0 ${r}px ${r}px`:r+'px';
+isl.style.setProperty('--g',a&&S.gl?t.c+'99':'transparent');
+isl.classList.toggle('ex',st=='exp');isl.classList.toggle('on',st!='idle'&&!!S.gl);isl.classList.toggle('pz',!(A.music&&A.music.on));
+const sh=b&&st!='exp';if(b&&sec.dataset.t!=b){sec.dataset.t=b;sec.innerHTML=I(T[b].ic,18,T[b].c)}
+sec.style.opacity=sh?1:0;sec.style.pointerEvents=sh?'auto':'none';sec.style.transform=sh?`translateX(${w*S.sc/2+8}px) scale(${S.sc})`:`translateX(${w*S.sc/2-10}px) scale(0)`}
+function later(){clearTimeout(cT);const a=pri()[0];if(!a||T[a].tr||(a=='call'&&A.call.s=='in'))return;cT=setTimeout(()=>{if(st=='exp'){st='cmp';go()}},S.ac*1000)}
+function setSt(s){const a=pri()[0];if(!a||(s=='exp'&&!T[a].ex))return;st=s;if(s=='exp')later();hap();go()}
+function start(k,o){clearTimeout(tm[k]);pn=null;A[k]=Object.assign(DF[k](),o,{v:0});const i=ord.indexOf(k);if(i>-1)ord.splice(i,1);ord.push(k);const t=T[k];
+if(t.tr)tm[k]=setTimeout(()=>end(k),t.tr);if(pri()[0]==k){st=t.ax&&t.ex?'exp':'cmp';later()}hap();go()}
+function end(k){if(!A[k])return;const was=pri()[0]==k;clearTimeout(tm[k]);delete A[k];ord.splice(ord.indexOf(k),1);if(pn==k)pn=null;const a=pri()[0];if(was)st=a?'cmp':'idle';hap();go()}
+const chg=k=>{A[k].v++;go()};
+function swipe(a,dx){isl.style.setProperty('--x',(dx>0?150:-150)+'px');isl.style.opacity=0;setTimeout(()=>{isl.classList.add('nx');isl.style.setProperty('--x','0px');end(a);void isl.offsetWidth;isl.classList.remove('nx');isl.style.opacity=1},220)}
+function act(a){const c=A.call,m=A.music;
+({pl:()=>{m.on=!m.on;chg('music')},pv:()=>{m.i=(m.i+2)%3;m.pos=0;chg('music')},nx:()=>{m.i=(m.i+1)%3;m.pos=0;chg('music')},ac:()=>{c.s='on';c.sec=0;st='cmp';chg('call')},dc:()=>end('call'),mu:()=>{c.m=!c.m;chg('call')},sp:()=>{c.sp=!c.sp;chg('call')},tp:()=>{A.timer.left+=60;upd()},ts:()=>end('timer'),rs:()=>end('rec'),rp:()=>{A.msg.rp=1;clearTimeout(tm.msg);tm.msg=setTimeout(()=>end('msg'),1800);chg('msg')}})[a]()}
+isl.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b){e.stopPropagation();act(b.dataset.a)}});
+let d=null,lp,held=0;
+isl.addEventListener('pointerdown',e=>{if(e.target.closest('[data-a]'))return;d={x:e.clientX,y:e.clientY};held=0;isl.setPointerCapture(e.pointerId);isl.classList.add('dn');lp=setTimeout(()=>{held=1;if(st!='exp')setSt('exp')},450)});
+isl.addEventListener('pointermove',e=>{if(d&&(Math.abs(e.clientX-d.x)>12||Math.abs(e.clientY-d.y)>12))clearTimeout(lp)});
+const up=e=>{if(!d)return;clearTimeout(lp);isl.classList.remove('dn');const dx=e.clientX-d.x,dy=e.clientY-d.y;d=null;if(e.type=='pointercancel')return;
+const a=pri()[0],inc=a=='call'&&A.call.s=='in';
+if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)&&st=='cmp'&&a&&!inc)return swipe(a,dx);
+if(dy<-35&&st=='exp'&&!inc)return setSt('cmp');
+if(held||Math.abs(dx)>12||Math.abs(dy)>12)return;
+if(st=='exp')setSt('cmp');else if(a)setSt('exp')};
+isl.addEventListener('pointerup',up);isl.addEventListener('pointercancel',up);
+sec.onclick=()=>{pn=sec.dataset.t;st='cmp';hap();go()};
+const clr=()=>{dm.forEach(clearTimeout);Object.keys(A).forEach(end)};
+const demo=()=>{clr();[[300,'music'],[2500,'timer'],[4500,'msg'],[8500,'chg'],[11500,'call'],[16000,'buds'],[19500,'nav']].forEach(([t,k])=>dm.push(setTimeout(()=>start(k),t)))};
+$('#g').innerHTML=Object.keys(LB).map(k=>`<button data-s="${k}">${I(T[k].ic,22,T[k].c)}<span>${LB[k]}</span></button>`).join('')+`<button data-s="_d">${I('play',22)}<span>Demo</span></button><button data-s="_x">${I('x',22)}<span>Alle beenden</span></button>`;
+$('#g').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.s;k=='_d'?demo():k=='_x'?clr():k=='sil'?start(k,{m:mut=!mut}):start(k)});
+document.querySelectorAll('#set [id]').forEach(el=>{const k=el.id,c=el.type=='checkbox';c?el.checked=!!S[k]:el.value=S[k];el.addEventListener('input',()=>{const v=c?+el.checked:el.value;S[k]=isNaN(v)?v:+v;apply();go(1);save()})});
+const KS=Object.keys(LB);addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;const i=e.key=='0'?9:+e.key-1;if(KS[i])start(KS[i]);if(e.key=='Escape')setSt('cmp')});
+addEventListener('resize',()=>go(1));
+setInterval(()=>{const m=A.music,t=A.timer,c=A.call,g=A.chg,r=A.rec,n=A.nav,v=A.deliv;
+if(m&&m.on)m.pos=(m.pos+1)%L;
+if(t&&--t.left<=0){end('timer');start('msg',{n:'Timer',tx:'Dein Timer ist abgelaufen',ic:'timer'})}
+if(c&&c.s=='on')c.sec++;if(g)g.p=Math.min(100,g.p+.5);if(r)r.sec++;
+if(n){n.d-=12;if(n.d<=0){n.i=(n.i+1)%3;n.d=380;chg('nav')}}
+if(v){v.p+=.012;if(v.p>=1){end('deliv');start('msg',{n:'Lieferung',tx:'Dein Essen ist angekommen 🍕',ic:'deliv'})}}
+upd()},1000);
+try{navigator.getBattery().then(b=>{b.onchargingchange=()=>{if(b.charging){start('chg');A.chg.p=b.level*100}}})}catch{}
+apply();go(1);setTimeout(()=>start('unl'),600);
+</script></body></html>
