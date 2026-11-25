@@ -6,14 +6,20 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
+import android.view.Display
 import android.view.Gravity
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -44,7 +50,6 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
     )
     private var view: ComposeView? = null
     private var fg: String? = null
-    private var home = ""
     private var curW = 0
     private var curH = 0
 
@@ -57,6 +62,38 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         }
     }
 
+    private fun owners(v: ComposeView) {
+        v.setViewTreeLifecycleOwner(this)
+        v.setViewTreeSavedStateRegistryOwner(this)
+        v.setViewTreeViewModelStoreOwner(this)
+    }
+
+    private fun cutoutRect(): Rect? {
+        if (Build.VERSION.SDK_INT < 29) return null
+        return try {
+            getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+                ?.cutout?.boundingRects?.firstOrNull { it.top <= 0 }
+        } catch (_: Exception) { null }
+    }
+
+    /** Position der Island: genau über der Kamera-Aussparung, sonst oben mittig. */
+    private fun place() {
+        val m = resources.displayMetrics
+        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        lp.x = 0
+        lp.y = (8 * m.density).toInt()
+        val r = cutoutRect()
+        if (r != null) {
+            lp.x = r.centerX() - m.widthPixels / 2
+            lp.y = (r.centerY() - (18 * m.density).toInt()).coerceAtLeast(0)
+        }
+    }
+
+    private fun homePkg() = packageManager.resolveActivity(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY
+    )?.activityInfo?.packageName ?: ""
+
     override fun onServiceConnected() {
         if (view != null) return
         ssc.performAttach()
@@ -64,46 +101,76 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         reg.currentState = Lifecycle.State.RESUMED
         wm = getSystemService(WindowManager::class.java)
         val d = resources.displayMetrics.density
-        home = packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName ?: ""
-        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        lp.y = (8 * d).toInt()
-        if (Build.VERSION.SDK_INT >= 30) {
-            val r = wm.currentWindowMetrics.windowInsets.displayCutout?.boundingRects?.firstOrNull { it.top <= 0 }
-            if (r != null) {
-                lp.x = r.centerX() - resources.displayMetrics.widthPixels / 2
-                lp.y = (r.centerY() - (18 * d).toInt()).coerceAtLeast(0)
-            }
-        }
+        Hub.hidden.value = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        place()
         val v = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@IslandA11y)
-            setViewTreeSavedStateRegistryOwner(this@IslandA11y)
-            setViewTreeViewModelStoreOwner(this@IslandA11y)
+            owners(this)
             setContent { Island() }
         }
         view = v
         wm.addView(v, lp)
         scope.launch {
-            combine(Hub.acts, Hub.exp) { l, e -> dims(topAct(l), e) }.distinctUntilChanged().collectLatest { (w, h) ->
-                if (w * h < curW * curH) delay(750)
-                curW = w
-                curH = h
-                if (w == 0) {
-                    lp.width = 1
-                    lp.height = 1
-                    lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                } else {
-                    lp.width = ((w + 2 * M) * d).toInt()
-                    lp.height = ((h + M) * d).toInt()
-                    lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            combine(Hub.acts, Hub.exp, Hub.hidden) { l, e, hd -> if (hd) 0 to 0 else dims(topAct(l), e) }
+                .distinctUntilChanged()
+                .collectLatest { (w, h) ->
+                    // Wachsen: Fenster sofort größer, damit die Animation nicht abgeschnitten wird.
+                    // Schrumpfen: erst warten, bis die Feder-Animation durch ist.
+                    if (w * h < curW * curH) delay(600)
+                    curW = w
+                    curH = h
+                    if (w == 0) {
+                        lp.width = 1
+                        lp.height = 1
+                        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    } else {
+                        lp.width = ((w + 2 * M) * d).toInt()
+                        lp.height = ((h + M) * d).toInt()
+                        lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    }
+                    try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
                 }
-                wm.updateViewLayout(v, lp)
-            }
         }
+        scope.launch { Hub.fly.collect { pkg -> launch { playFly(pkg) } } }
         ContextCompat.registerReceiver(this, rx, IntentFilter().apply {
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    /** Icon der minimierten App fliegt in die Island (eigenes, nicht berührbares Vollbild-Fenster, nur für die Dauer der Animation). */
+    private suspend fun playFly(pkg: String) {
+        if (Hub.hidden.value) return
+        val bmp = try { packageManager.getApplicationIcon(pkg).toBitmap(128, 128) } catch (_: Exception) { return }
+        val m = resources.displayMetrics
+        val tx = m.widthPixels / 2f + lp.x
+        val ty = lp.y + 18 * m.density
+        val fl = WindowManager.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        )
+        if (Build.VERSION.SDK_INT >= 28) fl.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        val fv = ComposeView(this).apply {
+            owners(this)
+            setContent { FlyIcon(bmp, tx, ty, m.widthPixels.toFloat(), m.heightPixels.toFloat()) }
+        }
+        try {
+            wm.addView(fv, fl)
+            delay(640)
+        } catch (_: Exception) {
+        } finally {
+            try { wm.removeView(fv) } catch (_: Exception) {}
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val v = view ?: return
+        Hub.hidden.value = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        place()
+        try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
     }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
@@ -111,7 +178,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         if (e.className?.startsWith("android.inputmethodservice") == true) return
         val p = e.packageName?.toString() ?: return
         if (p == packageName || p == "android" || p.contains("systemui")) return
-        if (p == home) { fg?.let { Hub.pull(it) }; fg = null } else fg = p
+        if (p == homePkg()) { fg?.let { Hub.pull(it) }; fg = null } else fg = p
     }
 
     override fun onInterrupt() {}
@@ -120,6 +187,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         try { unregisterReceiver(rx) } catch (_: Exception) {}
         scope.cancel()
         view?.let { try { wm.removeView(it) } catch (_: Exception) {} }
+        view = null
         reg.currentState = Lifecycle.State.DESTROYED
         viewModelStore.clear()
         super.onDestroy()
