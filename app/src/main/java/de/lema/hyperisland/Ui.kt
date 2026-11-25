@@ -1,6 +1,7 @@
 package de.lema.hyperisland
 
 import android.content.Intent
+import android.graphics.Bitmap
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -8,8 +9,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -21,34 +24,68 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+/** Rand (dp) links/rechts/unten um die Island im Fenster, Platz für Schatten und das "Einsaugen"-Bounce. */
 const val M = 22
 
 fun col(k: String) = Color(when (k) { "music" -> 0xFFFA2D55; "timer" -> 0xFFFF9F0A; "call", "chg" -> 0xFF30D158; else -> 0xFF5E9BFF })
 fun ic(k: String) = when (k) { "music" -> "🎵"; "timer" -> "⏱"; "call" -> "📞"; "chg" -> "⚡"; else -> "💬" }
 
+/** Zielgröße der Island in dp (Breite, Höhe). 0 x 0 = nichts anzeigen. */
 fun dims(a: Act?, e: Boolean): Pair<Int, Int> {
     if (a == null) return 0 to 0
     if (!e) return 236 to 36
-    val body = if (a.kind == "music") 60 else if (a.kind == "msg" || a.kind == "call") 56 else 42
-    val bar = if (a.kind == "music" || a.prog > 0f) 16 else 0
-    val btn = if (a.ctl.isNotEmpty()) 52 else 0
-    return 340 to (36 + body + bar + btn)
+    val body = when (a.kind) { "music" -> 60; "msg", "call" -> 54; else -> 42 }
+    var h = 32 + body
+    if (a.kind == "music" || a.prog > 0f) h += 12 + 4
+    if (a.ctl.isNotEmpty()) h += 12 + 40
+    return 344 to h
+}
+
+/** Pille im Kompaktzustand, Rundung wächst mit der Höhe bis max. 38dp. Hängt nur an der Größe, nicht an State. */
+private object IslandShape : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val max = with(density) { 38.dp.toPx() }
+        val rad = minOf(size.height / 2f, max)
+        return Outline.Rounded(RoundRect(size.toRect(), CornerRadius(rad)))
+    }
+}
+
+/** Größe wird erst in der Layout-Phase gelesen: Animation kostet keine Recomposition pro Frame. */
+private fun Modifier.animSize(w: State<Dp>, h: State<Dp>) = layout { m, _ ->
+    val pw = w.value.roundToPx()
+    val ph = h.value.roundToPx()
+    val p = m.measure(Constraints.fixed(pw, ph))
+    layout(pw, ph) { p.place(0, 0) }
 }
 
 @Composable
@@ -56,37 +93,129 @@ fun Island() {
     val list by Hub.acts.collectAsState()
     val exp by Hub.exp.collectAsState()
     val pulls by Hub.pulls.collectAsState()
-    val top = topAct(list)
-    var drag by remember { mutableFloatStateOf(0f) }
+    val hidden by Hub.hidden.collectAsState()
+    val top = if (hidden) null else topAct(list)
+    val live = top != null
+
+    // Letzte Aktivität merken, damit die Island beim Verschwinden sauber einschrumpft statt zu springen.
+    var held by remember { mutableStateOf<Act?>(null) }
+    LaunchedEffect(top?.id) { if (top != null) held = top }
+    val act = top ?: held
+
     var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(top != null) { shown = top != null }
+    LaunchedEffect(live) { shown = live }
+
+    val show by animateFloatAsState(if (live) 1f else 0f, tween(if (live) 200 else 320), label = "show")
+    val glass = animateFloatAsState(if (exp && live) 1f else 0f, tween(320), label = "glass")
+
     LaunchedEffect(top?.id) { Hub.exp.value = top?.kind == "msg" || top?.kind == "call" }
-    LaunchedEffect(pulls) { if (pulls > 0) { Hub.exp.value = true; delay(1300); if (topAct(Hub.acts.value)?.kind != "call") Hub.exp.value = false } }
+    // App wurde minimiert: Icon fliegt (Fly-Fenster) -> Island öffnet sich kurz, "schluckt" und klappt wieder zu.
+    LaunchedEffect(pulls) {
+        if (pulls > 0) {
+            delay(330)
+            Hub.exp.value = true
+            delay(1500)
+            if (topAct(Hub.acts.value)?.kind != "call") Hub.exp.value = false
+        }
+    }
     LaunchedEffect(exp, top?.id) { if (exp && top?.kind != "call") { delay(6000); Hub.exp.value = false } }
-    if (top == null) return
-    val (tw, th) = if (shown) dims(top, exp) else (126 to 36)
-    val sp = spring<Dp>(0.6f, 420f)
-    val w by animateDpAsState(tw.dp, sp, label = "w")
-    val h by animateDpAsState(th.dp, sp, label = "h")
-    val r by animateDpAsState(if (exp && shown) 38.dp else 18.dp, sp, label = "r")
-    val c = col(top.kind)
-    val shape = RoundedCornerShape(r)
+
+    val (tw, th) = if (shown && live && act != null) dims(act, exp) else 126 to 36
+    val sp = spring<Dp>(dampingRatio = 0.74f, stiffness = 380f)
+    val w = animateDpAsState(tw.dp, sp, label = "w")
+    val h = animateDpAsState(th.dp, sp, label = "h")
+
+    val bump = remember { Animatable(1f) }
+    LaunchedEffect(pulls) {
+        if (pulls > 0) {
+            delay(330)
+            bump.animateTo(1.08f, tween(90))
+            bump.animateTo(1f, spring(0.4f, 420f))
+        }
+    }
+
+    val ox = remember { Animatable(0f) }
+    val oy = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val dismissPx = with(LocalDensity.current) { 90.dp.toPx() }
+    val upPx = with(LocalDensity.current) { 30.dp.toPx() }
+
+    if (act == null || (!live && show == 0f)) return
+    val c = col(act.kind)
+
     Box(Modifier.fillMaxSize(), Alignment.TopCenter) {
         Box(
-            Modifier.width(w).height(h)
-                .shadow(16.dp, shape, ambientColor = c, spotColor = c)
-                .clip(shape)
-                .background(Brush.verticalGradient(listOf(Color(0xEB26262E), Color(0xF00A0A10))))
-                .drawBehind { drawRect(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color.Transparent), endY = size.height * 0.55f)) }
-                .border(1.dp, Brush.linearGradient(listOf(Color(0x70FFFFFF), Color(0x0FFFFFFF), Color(0x4DFFFFFF))), shape)
-                .pointerInput(top.id) { detectTapGestures(onTap = { Hub.exp.value = !Hub.exp.value }, onLongPress = { Hub.exp.value = true }) }
-                .pointerInput(top.id) {
-                    detectHorizontalDragGestures(onDragEnd = { if (abs(drag) > 120f) Hub.drop(top.id); drag = 0f }) { _, d -> drag += d }
+            Modifier
+                .animSize(w, h)
+                // Gesten VOR graphicsLayer, sonst wandert das Koordinatensystem mit dem Finger mit.
+                .pointerInput(act.id) {
+                    detectTapGestures(
+                        onTap = { Hub.exp.value = !Hub.exp.value },
+                        onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); Hub.exp.value = true }
+                    )
                 }
+                .pointerInput(act.id) {
+                    detectDragGestures(
+                        onDragEnd = {
+                            val dx = ox.value
+                            val dy = oy.value
+                            scope.launch {
+                                if (abs(dx) > dismissPx) {
+                                    ox.animateTo(if (dx > 0) 700f else -700f, tween(160))
+                                    Hub.dismiss(act)
+                                    ox.snapTo(0f)
+                                    oy.snapTo(0f)
+                                } else {
+                                    if (dy < -upPx) Hub.exp.value = false
+                                    launch { ox.animateTo(0f, spring(0.6f, 500f)) }
+                                    oy.animateTo(0f, spring(0.6f, 500f))
+                                }
+                            }
+                        },
+                        onDragCancel = { scope.launch { ox.snapTo(0f); oy.snapTo(0f) } },
+                        onDrag = { change, d ->
+                            change.consume()
+                            scope.launch {
+                                ox.snapTo(ox.value + d.x)
+                                oy.snapTo((oy.value + d.y).coerceIn(-90f, 0f))
+                            }
+                        }
+                    )
+                }
+                .graphicsLayer {
+                    translationX = ox.value
+                    translationY = oy.value * 0.4f
+                    scaleX = bump.value
+                    scaleY = bump.value
+                    transformOrigin = TransformOrigin(0.5f, 0f)
+                    alpha = show * (1f - (abs(ox.value) / (dismissPx * 3f)).coerceIn(0f, 1f))
+                }
+                .shadow(14.dp, IslandShape, clip = false, ambientColor = c.copy(alpha = 0.35f), spotColor = c.copy(alpha = 0.35f))
+                .clip(IslandShape)
+                .drawBehind {
+                    val g = glass.value
+                    val base = 0.97f - 0.17f * g
+                    // 1) getönte Glasfläche
+                    drawRect(Brush.verticalGradient(listOf(Color(0xFF24242E).copy(alpha = base), Color(0xFF06060A).copy(alpha = base))))
+                    // 2) Farbschimmer der Aktivität von unten
+                    drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.copy(alpha = 0.20f * g)), startY = size.height * 0.4f))
+                    // 3) Glanzlicht oben links + weicher Top-Sheen
+                    drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.24f), Color.Transparent), center = Offset(size.width * 0.16f, 0f), radius = size.width * 0.6f))
+                    drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), endY = size.height * 0.5f))
+                    // 4) feine Lichtkante direkt unter dem oberen Rand
+                    drawRoundRect(
+                        Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.38f), Color.Transparent)),
+                        topLeft = Offset(size.width * 0.12f, 1.5.dp.toPx()),
+                        size = Size(size.width * 0.76f, 1.dp.toPx()),
+                        cornerRadius = CornerRadius(1f)
+                    )
+                }
+                .border(1.dp, Brush.linearGradient(listOf(Color(0xB3FFFFFF), Color(0x14FFFFFF), Color(0x66FFFFFF))), IslandShape)
         ) {
-            Crossfade(top.id to exp, label = "c") { (id, e) ->
-                val a = list.find { it.id == id }
-                if (a != null) { if (e) Expanded(a) else Compact(a) }
+            Crossfade(act.id to exp, animationSpec = tween(170), label = "c") { (id, e) ->
+                val a = list.find { it.id == id } ?: act
+                if (e) Expanded(a) else Compact(a)
             }
         }
     }
@@ -98,7 +227,11 @@ fun Eq(c: Color, on: Boolean) {
     Row(Modifier.height(16.dp), Arrangement.spacedBy(2.dp), Alignment.CenterVertically) {
         listOf(520, 380, 610, 450).forEach { d ->
             val s by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(d, easing = LinearEasing), RepeatMode.Reverse), label = "b")
-            Box(Modifier.width(3.dp).fillMaxHeight(if (on) s else 0.25f).clip(RoundedCornerShape(2.dp)).background(c))
+            Box(
+                Modifier.width(3.dp).fillMaxHeight()
+                    .graphicsLayer { scaleY = if (on) s else 0.25f; transformOrigin = TransformOrigin(0.5f, 1f) }
+                    .clip(RoundedCornerShape(2.dp)).background(c)
+            )
         }
     }
 }
@@ -119,8 +252,12 @@ fun Ico(k: String) = Canvas(Modifier.size(22.dp)) {
 }
 
 @Composable
-fun Bar(p: Float, c: Color) = Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
-    Box(Modifier.fillMaxWidth(p.coerceIn(0f, 1f)).fillMaxHeight().background(c))
+fun Bar(p: Float, c: Color) {
+    val ap by animateFloatAsState(p.coerceIn(0f, 1f), tween(950, easing = LinearEasing), label = "bar")
+    Box(
+        Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))
+            .drawBehind { drawRect(c, size = Size(size.width * ap, size.height)) }
+    )
 }
 
 @Composable
@@ -136,7 +273,18 @@ fun Lead(a: Act, s: Int, open: Boolean = true) {
 @Composable
 fun Pill(b: Btn, m: Modifier) {
     val bg = when (b.tone) { 1 -> Color(0xFF30D158); 2 -> Color(0xFFFF453A); else -> Color(0x26FFFFFF) }
-    Box(m.height(40.dp).clip(RoundedCornerShape(20.dp)).background(bg).clickable { b.f() }, Alignment.Center) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val sc by animateFloatAsState(if (pressed) 0.92f else 1f, spring(0.6f, 800f), label = "press")
+    Box(
+        m.height(40.dp)
+            .graphicsLayer { scaleX = sc; scaleY = sc }
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(20.dp))
+            .clickable(src, null) { b.f() },
+        Alignment.Center
+    ) {
         if (b.label == "prev" || b.label == "play" || b.label == "pause" || b.label == "next") Ico(b.label)
         else Text(b.label, color = if (b.tone == 1) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
@@ -162,5 +310,32 @@ fun Expanded(a: Act) = Column(Modifier.fillMaxSize().padding(16.dp), verticalArr
     if (a.kind == "music" || a.prog > 0f) Bar(a.prog, col(a.kind))
     if (a.ctl.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         a.ctl.forEach { Pill(it, Modifier.weight(1f)) }
+    }
+}
+
+/**
+ * Das App-Icon einer minimierten App fliegt vom unteren Bildschirmbereich in die Island,
+ * schrumpft dabei und blendet aus. Läuft in einem eigenen, nicht berührbaren Vollbild-Fenster.
+ */
+@Composable
+fun FlyIcon(bmp: Bitmap, tx: Float, ty: Float, sw: Float, sh: Float) {
+    val p = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { p.animateTo(1f, tween(520, easing = CubicBezierEasing(0.45f, 0f, 0.85f, 0.35f))) }
+    val size = with(LocalDensity.current) { 72.dp.toPx() }
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            bmp.asImageBitmap(), null,
+            Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).graphicsLayer {
+                val t = p.value
+                val sx = sw / 2f
+                val sy = sh * 0.62f
+                translationX = sx + (tx - sx) * t - size / 2f
+                translationY = sy + (ty - sy) * t - size / 2f
+                val s = 1f - 0.74f * t
+                scaleX = s
+                scaleY = s
+                alpha = if (t < 0.7f) 1f else 1f - (t - 0.7f) / 0.3f
+            }
+        )
     }
 }
