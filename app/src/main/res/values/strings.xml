@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_desc">Zeigt die Dynamic Island über der Statusleiste an und erkennt, wenn du eine App minimierst.</string>
+</resources>
