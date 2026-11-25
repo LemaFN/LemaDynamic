@@ -4,7 +4,11 @@ import android.graphics.Bitmap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class Btn(val label: String, val tone: Int = 0, val f: () -> Unit)
+/** Button der Island. Gleichheit nur über Label + Ton, damit Lambdas keine Dauer-Recomposition auslösen. */
+class Btn(val label: String, val tone: Int = 0, val f: () -> Unit) {
+    override fun equals(other: Any?) = other is Btn && other.label == label && other.tone == tone
+    override fun hashCode() = label.hashCode() * 31 + tone
+}
 
 data class Act(
     val id: String, val kind: String, val title: String, val sub: String = "",
@@ -20,25 +24,58 @@ object Hub {
     val acts = MutableStateFlow<List<Act>>(emptyList())
     val exp = MutableStateFlow(false)
     val pulls = MutableStateFlow(0)
+    /** true = Island komplett ausblenden (z. B. Querformat). */
+    val hidden = MutableStateFlow(false)
+    /** Paketname einer App, die gerade minimiert wurde und "eingezogen" werden soll. */
+    val fly = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Wird vom Notification-Listener gesetzt; die App nutzt es, um einen Rebind anzustoßen. */
+    @Volatile var listenerUp = false
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var tj: Job? = null
+    private val muted = HashMap<String, String>()
+    private val ttlJobs = HashMap<String, Job>()
+
+    private fun key(a: Act) = a.title + "\u0000" + a.sub
 
     fun post(a: Act) {
+        if (muted[a.id] == key(a)) return
         val old = acts.value.find { it.id == a.id }
         if (old == null && (a.kind == "msg" || a.kind == "call")) exp.value = true
         acts.update { l -> l.filter { it.id != a.id } + a.copy(t0 = old?.t0 ?: a.t0) }
-        if (a.ttl > 0) scope.launch { delay(a.ttl); drop(a.id) }
+        if (a.ttl > 0) {
+            ttlJobs.remove(a.id)?.cancel()
+            ttlJobs[a.id] = scope.launch { delay(a.ttl); drop(a.id) }
+        }
     }
 
-    fun drop(id: String) = acts.update { l -> l.filter { it.id != id } }
+    fun drop(id: String) {
+        ttlJobs.remove(id)?.cancel()
+        acts.update { l -> l.filter { it.id != id } }
+    }
 
-    fun pull(pkg: String) { if (pkg.isNotEmpty() && acts.value.any { it.pkg == pkg }) pulls.update { it + 1 } }
+    /** Vom Nutzer weggewischt: dieselbe Aktivität taucht nicht sofort wieder auf (z. B. gleicher Song). */
+    fun dismiss(a: Act) {
+        muted[a.id] = key(a)
+        drop(a.id)
+    }
+
+    fun unmute(id: String) { muted.remove(id) }
+
+    fun pull(pkg: String) {
+        if (pkg.isNotEmpty() && acts.value.any { it.pkg == pkg }) {
+            pulls.update { it + 1 }
+            fly.tryEmit(pkg)
+        }
+    }
 
     fun timer(s: Int) {
         tj?.cancel()
         tj = scope.launch {
             for (i in s downTo 1) {
-                post(Act("timer", "timer", "Timer", "%d:%02d".format(i / 60, i % 60), ctl = listOf(Btn("Stopp", 2) { tj?.cancel(); drop("timer") })))
+                post(Act("timer", "timer", "Timer", "%d:%02d".format(i / 60, i % 60),
+                    prog = i / s.toFloat(),
+                    ctl = listOf(Btn("Stopp", 2) { tj?.cancel(); drop("timer") })))
                 delay(1000)
             }
             drop("timer")
