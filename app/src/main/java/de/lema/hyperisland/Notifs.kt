@@ -22,6 +22,8 @@ class Notifs : NotificationListenerService() {
     private val h = Handler(Looper.getMainLooper())
     private val chrono = HashMap<String, StatusBarNotification>()
     private var watched: List<MediaController> = emptyList()
+    /** Player-Benachrichtigung (für Apps ohne MediaSession, z. B. manche Dateimanager). */
+    private var mediaN: StatusBarNotification? = null
 
     private val tick = object : Runnable {
         override fun run() { refresh(); chronos(); h.postDelayed(this, 1000) }
@@ -52,7 +54,12 @@ class Notifs : NotificationListenerService() {
             watch(msm.getActiveSessions(cn))
         } catch (_: Exception) {}
         // Schon laufende Timer/Stoppuhren beim Start erkennen
-        try { activeNotifications?.forEach { if (isChrono(it.notification)) chrono[it.key] = it } } catch (_: Exception) {}
+        try {
+            activeNotifications?.forEach {
+                if (isChrono(it.notification, it.packageName)) chrono[it.key] = it
+                else if (it.packageName != packageName && looksLikeMedia(it.notification)) mediaN = it
+            }
+        } catch (_: Exception) {}
         h.removeCallbacks(tick)
         h.post(tick)
     }
@@ -64,6 +71,7 @@ class Notifs : NotificationListenerService() {
         watch(emptyList())
         chrono.keys.forEach { Hub.drop("tm:$it") }
         chrono.clear()
+        mediaN = null
         Hub.drop("music")
     }
 
@@ -76,6 +84,8 @@ class Notifs : NotificationListenerService() {
         val md = c?.metadata
         val ps = c?.playbackState
         if (c == null || md == null || ps == null) {
+            val m = mediaN
+            if (m != null) { fromNotif(m); return }
             Hub.unmute("music")
             Hub.drop("music")
             return
@@ -93,9 +103,53 @@ class Notifs : NotificationListenerService() {
             ctl = listOf(Btn("prev") { t.skipToPrevious() }, Btn(if (pl) "pause" else "play") { if (pl) t.pause() else t.play() }, Btn("next") { t.skipToNext() })))
     }
 
-    /** Timer/Stoppuhr der Uhr-App: laufende Benachrichtigung mit Chronometer. */
-    private fun isChrono(n: Notification) =
-        n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) && n.category != Notification.CATEGORY_CALL && n.`when` > 0
+    private val clockHint = Regex("(?i)(clock|timer|stopwatch|alarm|uhr)")
+    private val mediaLabel = Regex("(?i)(prev|next|pause|play|skip|wiedergabe|abspielen|pausieren|zurück|weiter)")
+
+    /** Strenge Medien-Erkennung: MediaStyle, Transport-Kategorie oder mindestens zwei Player-Buttons. */
+    private fun looksLikeMedia(n: Notification): Boolean {
+        if (n.category == Notification.CATEGORY_TRANSPORT) return true
+        if (n.extras.containsKey(Notification.EXTRA_MEDIA_SESSION)) return true
+        if (n.extras.getString(Notification.EXTRA_TEMPLATE)?.endsWith("MediaStyle") == true) return true
+        return n.actions.orEmpty().count { mediaLabel.containsMatchIn(it.title?.toString() ?: "") } >= 2
+    }
+
+    /**
+     * Timer/Stoppuhr: laufende Benachrichtigung mit Chronometer. Player zählen mit, wenn sie ihre Spielzeit
+     * als Chronometer anzeigen, das ist KEIN Timer (lief sonst nach dem Pausieren weiter).
+     * Gezählt wird nur ein Countdown oder eine Stoppuhr einer Uhr-App.
+     */
+    private fun isChrono(n: Notification, pkg: String): Boolean {
+        if (!n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) || n.`when` <= 0) return false
+        if (n.category == Notification.CATEGORY_CALL || looksLikeMedia(n)) return false
+        return n.extras.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN) || clockHint.containsMatchIn(pkg)
+    }
+
+    private fun btnKey(l: String): String {
+        val x = l.lowercase()
+        return when {
+            x.contains("prev") || x.contains("zurück") || x.contains("vorher") -> "prev"
+            x.contains("next") || x.contains("weiter") || x.contains("skip") || x.contains("nächst") -> "next"
+            x.contains("pause") -> "pause"
+            x.contains("play") || x.contains("wiedergabe") || x.contains("abspielen") -> "play"
+            else -> l
+        }
+    }
+
+    /** Musik-Anzeige direkt aus der Player-Benachrichtigung, wenn es keine MediaSession gibt. */
+    private fun fromNotif(s: StatusBarNotification) {
+        val n = s.notification
+        val acts = n.actions.orEmpty()
+        val playing = acts.any { (it.title?.toString() ?: "").lowercase().contains("pause") }
+        val now = SystemClock.elapsedRealtime()
+        if (playing) lastPlay = now else if (now - lastPlay > 15000) { Hub.drop("music"); return }
+        val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Musik"
+        val sub = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        val big = try { n.getLargeIcon()?.loadDrawable(this)?.toBitmap(128, 128) } catch (_: Exception) { null }
+        val art = big ?: try { packageManager.getApplicationIcon(s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
+        Hub.post(Act("music", "music", title, sub, on = playing, art = art, pkg = s.packageName,
+            ctl = acts.take(4).map { x -> Btn(btnKey(x.title?.toString() ?: "")) { go(x.actionIntent) } }))
+    }
 
     private fun fmt(sec: Long) =
         if (sec >= 3600) "%d:%02d:%02d".format(sec / 3600, sec % 3600 / 60, sec % 60) else "%d:%02d".format(sec / 60, sec % 60)
@@ -123,7 +177,9 @@ class Notifs : NotificationListenerService() {
     override fun onNotificationPosted(s: StatusBarNotification) {
         val n = s.notification
         if (s.packageName == packageName) return
-        if (isChrono(n)) { chrono[s.key] = s; chronos(); return }
+        if (isChrono(n, s.packageName)) { chrono[s.key] = s; chronos(); return }
+        if (chrono.remove(s.key) != null) Hub.drop("tm:${s.key}")
+        if (looksLikeMedia(n)) { mediaN = s; refresh(); return }
         val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
         val text = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val icon = try { packageManager.getApplicationIcon(s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
@@ -146,6 +202,7 @@ class Notifs : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(s: StatusBarNotification) {
+        if (mediaN?.key == s.key) { mediaN = null; refresh() }
         if (chrono.remove(s.key) != null) Hub.drop("tm:${s.key}")
         when (s.notification.category) {
             Notification.CATEGORY_CALL -> Hub.drop("call")
