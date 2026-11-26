@@ -78,6 +78,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
 
     /** Position der Island: genau über der Kamera-Aussparung, sonst oben mittig. */
     private fun place() {
+        val c = Cfg.v.value
         val m = resources.displayMetrics
         lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -86,9 +87,13 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         val r = cutoutRect()
         if (r != null) {
             lp.x = r.centerX() - m.widthPixels / 2
-            lp.y = (r.centerY() - (18 * m.density).toInt()).coerceAtLeast(0)
+            lp.y = (r.centerY() - (18 * m.density * c.scale).toInt()).coerceAtLeast(0)
         }
+        lp.x += (c.offX * m.density).toInt()
+        lp.y = (lp.y + (c.offY * m.density).toInt()).coerceAtLeast(0)
     }
+
+    private fun landscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     private fun homePkg() = packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY
@@ -99,9 +104,10 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         ssc.performAttach()
         ssc.performRestore(null)
         reg.currentState = Lifecycle.State.RESUMED
+        Cfg.load(applicationContext)
         wm = getSystemService(WindowManager::class.java)
         val d = resources.displayMetrics.density
-        Hub.hidden.value = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        Hub.hidden.value = landscape() && Cfg.v.value.hideLandscape
         place()
         val v = ComposeView(this).apply {
             owners(this)
@@ -110,26 +116,41 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         view = v
         wm.addView(v, lp)
         scope.launch {
-            combine(Hub.acts, Hub.exp, Hub.hidden) { l, e, hd -> if (hd) 0 to 0 else dims(topAct(l), e) }
+            combine(Hub.acts, Hub.exp, Hub.hidden, Cfg.v) { l, e, hd, c ->
+                val (w, h) = if (hd) 0 to 0 else dims(topAct(l), e, c.compactW.toInt())
+                Triple(w, h, c)
+            }
                 .distinctUntilChanged()
-                .collectLatest { (w, h) ->
+                .collectLatest { (w, h, c) ->
                     // Wachsen: Fenster sofort größer, damit die Animation nicht abgeschnitten wird.
                     // Schrumpfen: erst warten, bis die Feder-Animation durch ist.
-                    if (w * h < curW * curH) delay(600)
+                    if (w * h < curW * curH) delay((450 + 650 * c.wobble).toLong())
                     curW = w
                     curH = h
+                    place()
                     if (w == 0) {
                         lp.width = 1
                         lp.height = 1
                         lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                     } else {
-                        lp.width = ((w + 2 * M) * d).toInt()
-                        lp.height = ((h + M) * d).toInt()
+                        lp.width = ((w * c.scale + 2 * M) * d).toInt()
+                        lp.height = ((h * c.scale + M) * d).toInt()
                         lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    }
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        // Experimentell: echter Hintergrund-Blur hinter dem (rechteckigen) Fenster, nur wenn aufgeklappt
+                        if (c.blur > 0f && w != 0 && h > 36) {
+                            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                            lp.blurBehindRadius = c.blur.toInt()
+                        } else {
+                            lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+                            lp.blurBehindRadius = 0
+                        }
                     }
                     try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
                 }
         }
+        scope.launch { Cfg.v.collect { Hub.hidden.value = landscape() && it.hideLandscape } }
         scope.launch { Hub.fly.collect { pkg -> launch { playFly(pkg) } } }
         ContextCompat.registerReceiver(this, rx, IntentFilter().apply {
             addAction(Intent.ACTION_POWER_CONNECTED)
@@ -143,7 +164,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         val bmp = try { packageManager.getApplicationIcon(pkg).toBitmap(128, 128) } catch (_: Exception) { return }
         val m = resources.displayMetrics
         val tx = m.widthPixels / 2f + lp.x
-        val ty = lp.y + 18 * m.density
+        val ty = lp.y + 18 * m.density * Cfg.v.value.scale
         val fl = WindowManager.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -168,7 +189,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val v = view ?: return
-        Hub.hidden.value = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        Hub.hidden.value = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE && Cfg.v.value.hideLandscape
         place()
         try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
     }
