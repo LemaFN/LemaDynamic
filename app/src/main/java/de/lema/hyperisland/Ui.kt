@@ -148,6 +148,7 @@ private fun IslandBody(cfg: Config) {
     val haptic = LocalHapticFeedback.current
     val dismissPx = with(LocalDensity.current) { 90.dp.toPx() }
     val upPx = with(LocalDensity.current) { 30.dp.toPx() }
+    val shader = remember { Glass.create() }
 
     if (act == null || (!live && show == 0f)) return
     val c = col(act.kind)
@@ -205,6 +206,8 @@ private fun IslandBody(cfg: Config) {
                 .drawBehind {
                     val g = glass.value
                     val base = cfg.compactOpacity + (cfg.opacity - cfg.compactOpacity) * g
+                    // Bevorzugt: Glas-Shader mit Rand-Lichtbrechung; sonst unten das Schichten-Fallback
+                    if (cfg.refract && Glass.draw(this, shader, minOf(size.height / 2f, cfg.corner.dp.toPx()), c, cfg.glow, g, base, cfg.frost)) return@drawBehind
                     // 1) getönte Glasfläche
                     drawRect(Brush.verticalGradient(listOf(Color(0xFF24242E).copy(alpha = base), Color(0xFF06060A).copy(alpha = base))))
                     // 2) Farbschimmer der Aktivität von unten

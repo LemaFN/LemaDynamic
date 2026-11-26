@@ -16,6 +16,7 @@ data class Config(
     val offY: Float = 0f,               // Verschiebung nach unten (dp)
     val compactW: Float = 236f,         // Breite eingeklappt (dp)
     val holdSec: Float = 6f,            // so lange bleibt die Island aufgeklappt
+    val refract: Boolean = true,        // Glas-Shader mit Rand-Lichtbrechung (Android 13+)
     val blur: Float = 0f,               // Hintergrund-Blur in px (0 = aus, nur Android 12+, experimentell)
     val showMsg: Boolean = true,
     val showMusic: Boolean = true,
@@ -59,6 +60,7 @@ object Cfg {
             compactW = p.getFloat("compactW", d.compactW),
             holdSec = p.getFloat("holdSec", d.holdSec),
             blur = p.getFloat("blur", d.blur),
+            refract = p.getBoolean("refract", d.refract),
             showMsg = p.getBoolean("showMsg", d.showMsg),
             showMusic = p.getBoolean("showMusic", d.showMusic),
             showTimer = p.getBoolean("showTimer", d.showTimer),
@@ -82,7 +84,7 @@ object Cfg {
             .putFloat("compactW", n.compactW).putFloat("holdSec", n.holdSec).putFloat("blur", n.blur)
             .putBoolean("showMsg", n.showMsg).putBoolean("showMusic", n.showMusic).putBoolean("showTimer", n.showTimer)
             .putBoolean("showCall", n.showCall).putBoolean("showCharge", n.showCharge).putBoolean("pull", n.pull)
-            .putBoolean("haptic", n.haptic).putBoolean("hideLandscape", n.hideLandscape).putBoolean("privacy", n.privacy)
+            .putBoolean("haptic", n.haptic).putBoolean("hideLandscape", n.hideLandscape).putBoolean("privacy", n.privacy).putBoolean("refract", n.refract)
             .apply()
     }
 

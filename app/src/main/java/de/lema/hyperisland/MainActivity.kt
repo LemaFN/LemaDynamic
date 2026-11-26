@@ -92,6 +92,7 @@ fun Home() {
         }
 
         Sec("Glas") {
+            Sw("Lichtbrechung am Rand (Glas-Shader, Android 13+)", cfg.refract) { v -> set { it.copy(refract = v) } }
             Sl("Durchsichtigkeit (aufgeklappt)", 1f - cfg.opacity, 0f, 0.65f, { "${(it * 100).toInt()} %" }) { v -> set { it.copy(opacity = 1f - v) } }
             Sl("Durchsichtigkeit (eingeklappt)", 1f - cfg.compactOpacity, 0f, 0.5f, { "${(it * 100).toInt()} %" }) { v -> set { it.copy(compactOpacity = 1f - v) } }
             Sl("Frosted (milchig)", cfg.frost, 0f, 1f, { "${(it * 100).toInt()} %" }) { v -> set { it.copy(frost = v) } }
