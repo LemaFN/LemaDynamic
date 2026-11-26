@@ -21,6 +21,14 @@ GitHub → Reiter **Actions** → letzter Lauf „Build APK“ → unten bei **A
 4. Ausgegraut? Einstellungen > Apps > Hyper Island > Drei Punkte > Eingeschränkte Einstellungen zulassen
 5. Xiaomi/HyperOS: Autostart erlauben, Akku auf "Keine Einschränkungen"
 
+## Einstellungen (in der App, wirken live)
+- **Bewegung:** Wobbeligkeit, Haltezeit
+- **Glas:** Durchsichtigkeit (auf-/eingeklappt), Frosted, Glow, Hintergrund-Blur (experimentell, Android 12+)
+- **Größe & Position:** Größe, Breite, Ecken-Rundung, X/Y-Verschiebung
+- **Anzeigen:** Nachrichten, Musik, Timer/Stoppuhr/Wecker, Anrufe, Laden einzeln an/aus
+- **Verhalten:** App einziehen, Vibration, Querformat ausblenden, Sperrbildschirm-Datenschutz
+- Testbuttons und „Vorschau“ zum Ausprobieren
+
 ## Bedienung
-Tippen = auf/zu, lang drücken = Details, wischen = schließen, Cover/Icon antippen = App öffnen.
-Beim Minimieren einer App mit laufender Musik/Anruf zieht sich die Island ein.
+Tippen = auf/zu, lang drücken = Details, seitlich wischen = schließen, nach oben wischen = einklappen, Cover/Icon antippen = App öffnen.
+Beim Minimieren einer App mit laufender Musik/Anruf/Timer fliegt ihr Icon in die Island.
