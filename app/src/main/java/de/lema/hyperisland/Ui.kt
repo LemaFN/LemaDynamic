@@ -61,9 +61,9 @@ fun col(k: String) = Color(when (k) { "music" -> 0xFFFA2D55; "timer" -> 0xFFFF9F
 fun ic(k: String) = when (k) { "music" -> "🎵"; "timer" -> "⏱"; "call" -> "📞"; "chg" -> "⚡"; else -> "💬" }
 
 /** Zielgröße der Island in dp (Breite, Höhe). 0 x 0 = nichts anzeigen. */
-fun dims(a: Act?, e: Boolean): Pair<Int, Int> {
+fun dims(a: Act?, e: Boolean, cw: Int = 236): Pair<Int, Int> {
     if (a == null) return 0 to 0
-    if (!e) return 236 to 36
+    if (!e) return cw to 36
     val body = when (a.kind) { "music" -> 60; "msg", "call" -> 54; else -> 42 }
     var h = 32 + body
     if (a.kind == "music" || a.prog > 0f) h += 12 + 4
@@ -72,9 +72,9 @@ fun dims(a: Act?, e: Boolean): Pair<Int, Int> {
 }
 
 /** Pille im Kompaktzustand, Rundung wächst mit der Höhe bis max. 38dp. Hängt nur an der Größe, nicht an State. */
-private object IslandShape : Shape {
+private class IslandShape(private val maxDp: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val max = with(density) { 38.dp.toPx() }
+        val max = with(density) { maxDp.dp.toPx() }
         val rad = minOf(size.height / 2f, max)
         return Outline.Rounded(RoundRect(size.toRect(), CornerRadius(rad)))
     }
@@ -90,6 +90,14 @@ private fun Modifier.animSize(w: State<Dp>, h: State<Dp>) = layout { m, _ ->
 
 @Composable
 fun Island() {
+    val cfg by Cfg.v.collectAsState()
+    val d0 = LocalDensity.current
+    // Gesamtgröße über die Compose-Dichte: Größen, Schrift und Touch-Flächen skalieren zusammen
+    CompositionLocalProvider(LocalDensity provides Density(d0.density * cfg.scale, d0.fontScale)) { IslandBody(cfg) }
+}
+
+@Composable
+private fun IslandBody(cfg: Config) {
     val list by Hub.acts.collectAsState()
     val exp by Hub.exp.collectAsState()
     val pulls by Hub.pulls.collectAsState()
@@ -118,10 +126,10 @@ fun Island() {
             if (topAct(Hub.acts.value)?.kind != "call") Hub.exp.value = false
         }
     }
-    LaunchedEffect(exp, top?.id) { if (exp && top?.kind != "call") { delay(6000); Hub.exp.value = false } }
+    LaunchedEffect(exp, top?.id) { if (exp && top?.kind != "call") { delay((cfg.holdSec * 1000).toLong()); Hub.exp.value = false } }
 
-    val (tw, th) = if (shown && live && act != null) dims(act, exp) else 126 to 36
-    val sp = spring<Dp>(dampingRatio = 0.74f, stiffness = 380f)
+    val (tw, th) = if (shown && live && act != null) dims(act, exp, cfg.compactW.toInt()) else 126 to 36
+    val sp = spring<Dp>(dampingRatio = 0.9f - 0.55f * cfg.wobble, stiffness = 480f - 230f * cfg.wobble)
     val w = animateDpAsState(tw.dp, sp, label = "w")
     val h = animateDpAsState(th.dp, sp, label = "h")
 
@@ -143,6 +151,7 @@ fun Island() {
 
     if (act == null || (!live && show == 0f)) return
     val c = col(act.kind)
+    val shape = remember(cfg.corner) { IslandShape(cfg.corner) }
 
     Box(Modifier.fillMaxSize(), Alignment.TopCenter) {
         Box(
@@ -152,7 +161,7 @@ fun Island() {
                 .pointerInput(act.id) {
                     detectTapGestures(
                         onTap = { Hub.exp.value = !Hub.exp.value },
-                        onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); Hub.exp.value = true }
+                        onLongPress = { if (cfg.haptic) haptic.performHapticFeedback(HapticFeedbackType.LongPress); Hub.exp.value = true }
                     )
                 }
                 .pointerInput(act.id) {
@@ -191,15 +200,17 @@ fun Island() {
                     transformOrigin = TransformOrigin(0.5f, 0f)
                     alpha = show * (1f - (abs(ox.value) / (dismissPx * 3f)).coerceIn(0f, 1f))
                 }
-                .shadow(14.dp, IslandShape, clip = false, ambientColor = c.copy(alpha = 0.35f), spotColor = c.copy(alpha = 0.35f))
-                .clip(IslandShape)
+                .shadow(14.dp, shape, clip = false, ambientColor = c.copy(alpha = cfg.glow), spotColor = c.copy(alpha = cfg.glow))
+                .clip(shape)
                 .drawBehind {
                     val g = glass.value
-                    val base = 0.97f - 0.17f * g
+                    val base = cfg.compactOpacity + (cfg.opacity - cfg.compactOpacity) * g
                     // 1) getönte Glasfläche
                     drawRect(Brush.verticalGradient(listOf(Color(0xFF24242E).copy(alpha = base), Color(0xFF06060A).copy(alpha = base))))
                     // 2) Farbschimmer der Aktivität von unten
-                    drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.copy(alpha = 0.20f * g)), startY = size.height * 0.4f))
+                    drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.copy(alpha = 0.55f * cfg.glow * g)), startY = size.height * 0.4f))
+                    // 2b) Frost: milchige Schicht, je höher der Regler desto "frosted"
+                    drawRect(Color(0xFFDDE3F0).copy(alpha = cfg.frost * 0.22f * (0.35f + 0.65f * g)))
                     // 3) Glanzlicht oben links + weicher Top-Sheen
                     drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.24f), Color.Transparent), center = Offset(size.width * 0.16f, 0f), radius = size.width * 0.6f))
                     drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent), endY = size.height * 0.5f))
@@ -211,7 +222,7 @@ fun Island() {
                         cornerRadius = CornerRadius(1f)
                     )
                 }
-                .border(1.dp, Brush.linearGradient(listOf(Color(0xB3FFFFFF), Color(0x14FFFFFF), Color(0x66FFFFFF))), IslandShape)
+                .border(1.dp, Brush.linearGradient(listOf(Color(0xB3FFFFFF), Color(0x14FFFFFF), Color(0x66FFFFFF))), shape)
         ) {
             Crossfade(act.id to exp, animationSpec = tween(170), label = "c") { (id, e) ->
                 val a = list.find { it.id == id } ?: act
