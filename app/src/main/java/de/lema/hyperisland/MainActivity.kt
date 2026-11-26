@@ -73,21 +73,21 @@ fun Home() {
 
         Sec("Testen") {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Tb("Nachricht", Modifier.weight(1f)) { Hub.post(Act("msg", "msg", "Lena", "Kommst du heute zum Server-Treff? 🎮", ttl = 6000, ctl = listOf(Btn("Öffnen") {}))) }
-                Tb("Timer", Modifier.weight(1f)) { Hub.timer(60) }
-                Tb("Laden", Modifier.weight(1f)) { Hub.post(Act("chg", "chg", "Lädt", "73 %", prog = 0.73f, ttl = 5000)) }
+                Tb("Nachricht", Modifier.weight(1f)) { Hub.clearTests(); Hub.post(Act("msg", "msg", "Lena", "Kommst du heute zum Server-Treff? 🎮", ttl = 6000, ctl = listOf(Btn("Öffnen") {}))) }
+                Tb("Timer", Modifier.weight(1f)) { Hub.clearTests(); Hub.timer(60) }
+                Tb("Laden", Modifier.weight(1f)) { Hub.clearTests(); Hub.post(Act("chg", "chg", "Lädt", "73 %", prog = 0.73f, ttl = 5000)) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Tb("Anruf", Modifier.weight(1f)) {
-                    Hub.post(Act("call", "call", "Lena", "Eingehender Anruf",
+                Tb("Anruf", Modifier.weight(1f)) { Hub.clearTests();
+                    Hub.post(Act("call", "call", "Lena", "Eingehender Anruf", ttl = 12000,
                         ctl = listOf(Btn("Ablehnen", 2) { Hub.drop("call") }, Btn("Annehmen", 1) { Hub.drop("call") })))
                 }
-                Tb("Musik", Modifier.weight(1f)) {
-                    Hub.post(Act("demo-music", "music", "Beispiel-Song", "Beispiel-Künstler", prog = 0.4f,
+                Tb("Musik", Modifier.weight(1f)) { Hub.clearTests();
+                    Hub.post(Act("demo-music", "music", "Beispiel-Song", "Beispiel-Künstler", prog = 0.4f, ttl = 20000,
                         ctl = listOf(Btn("prev") {}, Btn("pause") { Hub.drop("demo-music") }, Btn("next") {})))
                 }
-                Tb("Vorschau", Modifier.weight(1f)) {
-                    Hub.post(Act("demo", "call", "Vorschau", "Verstelle die Regler, die Island ändert sich live",
+                Tb("Vorschau", Modifier.weight(1f)) { Hub.clearTests();
+                    Hub.post(Act("demo", "call", "Vorschau", "Verstelle die Regler, die Island ändert sich live", ttl = 90000,
                         ctl = listOf(Btn("Schließen", 2) { Hub.drop("demo") })))
                 }
             }

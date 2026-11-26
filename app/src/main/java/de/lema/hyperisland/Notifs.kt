@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ComponentName
+import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -24,6 +25,19 @@ class Notifs : NotificationListenerService() {
     private var watched: List<MediaController> = emptyList()
     /** Player-Benachrichtigung (für Apps ohne MediaSession, z. B. manche Dateimanager). */
     private var mediaN: StatusBarNotification? = null
+    private var artSrc: Bitmap? = null
+    private var artCopy: Bitmap? = null
+
+    /** Cover kopieren: der Player kann das Original recyceln, Zeichnen wäre dann ein Absturz. */
+    private fun safeArt(b: Bitmap?): Bitmap? {
+        if (b == null || b.isRecycled || b === artSrc) return artCopy?.takeIf { !it.isRecycled }
+        return try {
+            val c = Bitmap.createScaledBitmap(b, 192, 192, true)
+            artSrc = b
+            artCopy = c
+            c
+        } catch (_: Throwable) { null }
+    }
 
     private val tick = object : Runnable {
         override fun run() { refresh(); chronos(); h.postDelayed(this, 1000) }
@@ -96,7 +110,7 @@ class Notifs : NotificationListenerService() {
         val t = c.transportControls
         val dur = md.getLong(MediaMetadata.METADATA_KEY_DURATION)
         val pos = ps.position.coerceAtLeast(0L) + if (pl) ((now - ps.lastPositionUpdateTime) * ps.playbackSpeed).toLong() else 0L
-        val art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+        val art = safeArt(md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON))
         Hub.post(Act("music", "music", md.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Musik",
             md.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "",
             if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f, on = pl, art = art, pkg = c.packageName,

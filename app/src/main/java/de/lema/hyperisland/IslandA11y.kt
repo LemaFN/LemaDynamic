@@ -133,8 +133,10 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
                         lp.height = 1
                         lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                     } else {
-                        lp.width = ((w * c.scale + 2 * M) * d).toInt()
-                        lp.height = ((h * c.scale + M) * d).toInt()
+                        // Mit Blur: Fenster eng um die Island, sonst wird ein großes Rechteck verwischt
+                        val mg = if (c.blur > 0f) 0 else M
+                        lp.width = ((w * c.scale + 2 * mg) * d).toInt()
+                        lp.height = ((h * c.scale + mg) * d).toInt()
                         lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
                     }
                     if (Build.VERSION.SDK_INT >= 31) {
