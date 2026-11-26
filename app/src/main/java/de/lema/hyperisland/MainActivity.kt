@@ -1,6 +1,9 @@
 package de.lema.hyperisland
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -126,6 +129,24 @@ fun Home() {
             Sw("Vibration bei langem Drücken", cfg.haptic) { v -> set { it.copy(haptic = v) } }
             Sw("Im Querformat ausblenden", cfg.hideLandscape) { v -> set { it.copy(hideLandscape = v) } }
             Sw("Sperrbildschirm: Nachrichtentext verbergen", cfg.privacy) { v -> set { it.copy(privacy = v) } }
+        }
+
+        Sec("Diagnose") {
+            val crash = remember(n) { c.getSharedPreferences("crash", Context.MODE_PRIVATE).getString("last", null) }
+            Text("Bedienungshilfe: " + if (acc) "an" else "AUS", fontSize = 13.sp)
+            Text("Benachrichtigungszugriff: " + if (!nl) "AUS" else if (Hub.listenerUp) "an, verbunden" else "an, NICHT verbunden", fontSize = 13.sp)
+            Text("Glas-Shader: ${Glass.status}", fontSize = 13.sp)
+            Text("Aktive Anzeigen: " + Hub.acts.value.joinToString { it.kind + ":" + it.id }.ifEmpty { "keine" }, fontSize = 13.sp)
+            if (crash != null) {
+                Text("Letzter Absturz:", fontSize = 13.sp, color = Color(0xFFFF8A80))
+                Text(crash.take(1500), fontSize = 10.sp, color = Color(0xFFB4B4BC))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Tb("Kopieren", Modifier.weight(1f)) {
+                        (c.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Absturz", crash))
+                    }
+                    Tb("Löschen", Modifier.weight(1f)) { c.getSharedPreferences("crash", Context.MODE_PRIVATE).edit().clear().apply() }
+                }
+            }
         }
 
         OutlinedButton(onClick = { Cfg.reset(c) }, Modifier.fillMaxWidth()) { Text("Alles auf Standard zurücksetzen") }
