@@ -39,6 +39,7 @@ object Hub {
     private fun key(a: Act) = a.title + "\u0000" + a.sub
 
     fun post(a: Act) {
+        if (!Cfg.v.value.allows(a.kind, a.id)) return
         if (muted[a.id] == key(a)) return
         val old = acts.value.find { it.id == a.id }
         if (old == null && (a.kind == "msg" || a.kind == "call")) exp.value = true
@@ -63,7 +64,7 @@ object Hub {
     fun unmute(id: String) { muted.remove(id) }
 
     fun pull(pkg: String) {
-        if (pkg.isNotEmpty() && acts.value.any { it.pkg == pkg }) {
+        if (Cfg.v.value.pull && pkg.isNotEmpty() && acts.value.any { it.pkg == pkg }) {
             pulls.update { it + 1 }
             fly.tryEmit(pkg)
         }
