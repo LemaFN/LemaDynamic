@@ -82,8 +82,9 @@ private class IslandShape(private val maxDp: Float) : Shape {
 
 /** Größe wird erst in der Layout-Phase gelesen: Animation kostet keine Recomposition pro Frame. */
 private fun Modifier.animSize(w: State<Dp>, h: State<Dp>) = layout { m, _ ->
-    val pw = w.value.roundToPx()
-    val ph = h.value.roundToPx()
+    // Die Feder kann beim schnellen Auf-/Zuklappen mit Restschwung unter 0 schießen (Absturz: height(-2)), daher nach unten begrenzen
+    val pw = w.value.roundToPx().coerceAtLeast(1)
+    val ph = h.value.roundToPx().coerceAtLeast(1)
     val p = m.measure(Constraints.fixed(pw, ph))
     layout(pw, ph) { p.place(0, 0) }
 }
