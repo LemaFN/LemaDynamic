@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
         Cfg.load(this)
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize(), color = Color(0xFF05050A)) { Home() } } }
+        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize(), color = Color(0xFF05050A), contentColor = Color.White) { Home() } } }
     }
 }
 
@@ -157,7 +157,7 @@ fun Sw(label: String, v: Boolean, set: (Boolean) -> Unit) = Row(Modifier.fillMax
 
 @Composable
 fun Tb(label: String, m: Modifier, f: () -> Unit) =
-    Button(onClick = f, modifier = m, contentPadding = PaddingValues(horizontal = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C3A))) {
+    Button(onClick = f, modifier = m, contentPadding = PaddingValues(horizontal = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C3A), contentColor = Color.White)) {
         Text(label, fontSize = 13.sp, maxLines = 1)
     }
 
