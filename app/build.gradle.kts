@@ -18,8 +18,9 @@ android {
         applicationId = "de.lema.hyperisland"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3"
+        // Jeder CI-Build bekommt eine höhere Versionsnummer, sonst installiert Android ihn teils nicht über die alte App
+        versionCode = 10 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
+        versionName = "0.4." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

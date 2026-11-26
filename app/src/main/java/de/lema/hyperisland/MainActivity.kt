@@ -29,7 +29,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
         Cfg.load(this)
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize(), color = Color(0xFF05050A), contentColor = Color.White) { Home() } } }
+        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize(), color = Color(0xFF05050A), contentColor = Color.White) {
+            // Schriftfarbe an der Wurzel erzwingen, unabhängig von Surface/Theme
+            CompositionLocalProvider(LocalContentColor provides Color.White, LocalTextStyle provides LocalTextStyle.current.copy(color = Color.White)) { Home() }
+        } } }
     }
 }
 
@@ -56,6 +59,8 @@ fun Home() {
     ) {
         Text("Hyper Island", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Dynamic Island für Android", color = Color(0xFFB4B4BC))
+        val ver = remember { try { c.packageManager.getPackageInfo(c.packageName, 0).versionName } catch (_: Exception) { "?" } }
+        Text("Version $ver", fontSize = 12.sp, color = Color(0xFF8A8A96))
 
         Sec("Einrichtung") {
             Step("Bedienungshilfe „Hyper Island“ aktivieren", acc) { c.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -166,5 +171,5 @@ fun Tb(label: String, m: Modifier, f: () -> Unit) =
 fun Step(t: String, ok: Boolean, f: () -> Unit) = Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     Text(if (ok) "✅ " else "⬜ ")
     Text(t, Modifier.weight(1f), fontSize = 14.sp)
-    if (!ok) Button(onClick = f) { Text("Erlauben") }
+    if (!ok) Button(onClick = f, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8FB4FF), contentColor = Color(0xFF0A1530))) { Text("Erlauben", color = Color(0xFF0A1530)) }
 }
