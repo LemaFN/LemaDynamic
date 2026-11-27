@@ -203,15 +203,35 @@ class Notifs : NotificationListenerService() {
         }
     }
 
+    /**
+     * Ansicht der Benachrichtigung erzeugen. Der Interaktions-Handler ist keine öffentliche API, daher per Reflection:
+     * Klicks auf Tasten lösen so direkt den PendingIntent aus. Klappt das nicht, gilt der Standard-Handler des Systems.
+     */
+    private fun applyViews(rv: android.widget.RemoteViews): android.view.View {
+        try {
+            val hc = Class.forName("android.widget.RemoteViews\$InteractionHandler")
+            val proxy = java.lang.reflect.Proxy.newProxyInstance(hc.classLoader, arrayOf(hc)) { _, m, a ->
+                when (m.name) {
+                    "onInteraction" -> { try { (a?.getOrNull(1) as? android.app.PendingIntent)?.send() } catch (_: Throwable) {}; true }
+                    "toString" -> "ih"
+                    "hashCode" -> 0
+                    "equals" -> false
+                    else -> null
+                }
+            }
+            val m = android.widget.RemoteViews::class.java.getMethod("apply", Context::class.java, android.view.ViewGroup::class.java, hc)
+            return m.invoke(rv, applicationContext, android.widget.FrameLayout(this), proxy) as android.view.View
+        } catch (_: Throwable) {}
+        return rv.apply(applicationContext, android.widget.FrameLayout(this))
+    }
+
     @Suppress("DEPRECATION")
     private fun inspectViews(s: StatusBarNotification): Cv? {
         val n = s.notification
         val rvs = listOfNotNull(n.bigContentView, n.contentView, n.headsUpContentView)
         for (rv in rvs) {
             try {
-                // Eigener Handler: Klicks auf Tasten der Uhr-Ansicht lösen deren PendingIntent direkt aus
-                val handler = android.widget.RemoteViews.InteractionHandler { _, pi, _ -> try { pi.send() } catch (_: Throwable) {}; true }
-                val v = rv.apply(applicationContext, android.widget.FrameLayout(this), handler)
+                val v = applyViews(rv)
                 val texts = ArrayList<String>()
                 val btns = ArrayList<Triple<String, Int, android.view.View>>()
                 var chr: android.widget.Chronometer? = null
