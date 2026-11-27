@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,6 +157,9 @@ private fun IslandBody(cfg: Config) {
     val dismissPx = with(LocalDensity.current) { 90.dp.toPx() }
     val upPx = with(LocalDensity.current) { 30.dp.toPx() }
     val shader = remember { Glass.create() }
+    var nodeC by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var baseX by remember { mutableFloatStateOf(0f) }
+    var baseY by remember { mutableFloatStateOf(0f) }
 
     if (act == null || (!live && show == 0f)) return
     val c = col(act.kind)
@@ -164,6 +169,7 @@ private fun IslandBody(cfg: Config) {
         Box(
             Modifier
                 .animSize(w, h)
+                .onGloballyPositioned { nodeC = it }
                 // Gesten VOR graphicsLayer, sonst wandert das Koordinatensystem mit dem Finger mit.
                 .pointerInput(act.id) {
                     detectTapGestures(
@@ -173,6 +179,12 @@ private fun IslandBody(cfg: Config) {
                 }
                 .pointerInput(act.id) {
                     detectDragGestures(
+                        onDragStart = { off ->
+                            // Fensterposition des Fingers merken: lokale Koordinaten springen, wenn die Island unter dem Finger einklappt
+                            val wp = nodeC?.localToWindow(off) ?: off
+                            baseX = wp.x - ox.value
+                            baseY = wp.y - oy.value
+                        },
                         onDragEnd = {
                             val dx = ox.value
                             val dy = oy.value
@@ -192,9 +204,12 @@ private fun IslandBody(cfg: Config) {
                         onDragCancel = { scope.launch { ox.snapTo(0f); oy.snapTo(0f) } },
                         onDrag = { change, d ->
                             change.consume()
+                            val wp = nodeC?.localToWindow(change.position)
+                            val nx = if (wp != null) wp.x - baseX else ox.value + d.x
+                            val ny = if (wp != null) wp.y - baseY else oy.value + d.y
                             scope.launch {
-                                ox.snapTo(ox.value + d.x)
-                                oy.snapTo((oy.value + d.y).coerceIn(-90f, 0f))
+                                ox.snapTo(nx)
+                                oy.snapTo(ny.coerceIn(-90f, 0f))
                             }
                         }
                     )

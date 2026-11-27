@@ -25,8 +25,8 @@ Android-App (Kotlin + Jetpack Compose), "Dynamic Island" für Android (Gerät de
 Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Einziehen minimierter Apps, viele Einstellungen, Diagnose-Karte.
 
 ### Offene Bugs
-- **Wackler beim Einklappen / Springen der Island (offen, wird bearbeitet):** Nutzer-Videos zeigen kurz nach dem Einklappen des Musik-Fensters (ca. Sekunde 3 im Video `Screenrecorder-20261127-072130`) einen Ruck: Die Pille springt ~80-130 dp nach links (früher: nach rechts), ist dabei halbtransparent und gleitet in ca. 150 ms zurück in die Mitte. Früheres Video: dünner Strich beim Einklappen (Feder-Überschwingen, in 0.4.x mit Mindestgröße 88 % der Zielgröße entschärft, wohl nicht die ganze Ursache).
-  Hypothesen: (a) Fenstergröße/-position wird per `updateViewLayout` geändert, während Compose noch den alten Stand zeichnet bzw. das System das Fenster animiert; (b) Musik-Aktivität wird kurz entfernt und neu gesetzt (halbtransparent = `show`-Animation läuft neu); (c) `place()` liefert kurz andere Werte (Cutout).
+- **Wackler/Ruck beim Einklappen (Fix in Build nach 0.4.x, noch vom Nutzer zu bestätigen):** Ursache laut Video `Screenrecorder-20261127-072130` (ca. Sekunde 3): Die Pille sprang ~90 dp zur Seite, war halbtransparent und federte in ~100 ms zurück. Das ist der Drag-Offset `ox` in `Ui.kt` (Alpha hängt an |ox|, Rückfeder `spring(0.6, 500)`). Grund: Die Drag-Deltas wurden in lokalen Koordinaten der Island gemessen; klappt die Island unter dem Finger ein (Breite 344 → 236, zentriert), springt das lokale Koordinatensystem. Fix: Drag wird jetzt aus Fenster-Koordinaten (`localToWindow`) berechnet, absolut statt aufsummiert. Falls es weiter ruckelt: Hypothesen (a) `updateViewLayout` bei Fenster-Verkleinerung, (b) Musik-Aktivität kurz entfernt/neu gesetzt.
+- Früher: dünner Strich beim Einklappen (Feder-Überschwingen), mit Mindestgröße 88 % der Zielgröße entschärft.
 - **Uhr-App-Timer wird nicht angezeigt:** Format der Uhr-Benachrichtigung unbekannt. Heuristik in `Notifs.kt` ist eingebaut; der Nutzer soll in der App unter Diagnose "Log kopieren" und den Text schicken, dann gezielt anpassen.
 - **Echte Lichtbrechung des Hintergrunds** nicht möglich (eine App kann den Hintergrund hinter ihrem Fenster nicht lesen). Nur Rand-Effekte per Shader. MediaProjection wäre die einzige Alternative (Akku, Dauer-Hinweis), vom Nutzer nicht gewählt.
 
@@ -38,8 +38,9 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 ## Wer arbeitet woran
 | Claude | Dateien / Thema | Seit |
 |---|---|---|
-| Claude A (ursprüngliche Sitzung) | Wackler-Bug: `IslandA11y.kt` (Fenster), `Ui.kt` (Größen-Animation) | 2026-11-27 |
+| Claude A (ursprüngliche Sitzung) | Wackler-Bug: `Ui.kt` (Drag/Größen-Animation), `IslandA11y.kt` (Fenster) | 2026-11-27 |
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-27 Claude A: Ui.kt: Drag in Fenster-Koordinaten (Fix für seitlichen Ruck nach dem Einklappen).
 - 2026-11-27 Claude A: CLAUDE.md angelegt (Übergabe-Datei).
