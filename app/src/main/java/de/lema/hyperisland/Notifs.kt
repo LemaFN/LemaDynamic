@@ -185,7 +185,23 @@ class Notifs : NotificationListenerService() {
     }
 
     /** Inhalt einer Benachrichtigung mit eigener Ansicht (RemoteViews), z. B. der Timer der Uhr-App ohne Titel/Text. */
-    private class Cv(val texts: List<String>, val base: Long, val down: Boolean, val running: Boolean, val hasChrono: Boolean)
+    private class Cv(val texts: List<String>, val base: Long, val down: Boolean, val running: Boolean, val hasChrono: Boolean,
+                     val btns: List<Triple<String, Int, android.view.View>> = emptyList())
+
+    /** Anzeigename und Farbe einer Taste aus Beschriftung/Beschreibung/Ressourcenname der Uhr-Ansicht. */
+    private fun niceBtn(raw: String, alt: String): Pair<String, Int>? {
+        val x = raw.lowercase()
+        return when {
+            Regex("pause").containsMatchIn(x) -> "Pause" to 0
+            Regex("resume|continue|weiter|fortsetz|play|start").containsMatchIn(x) -> "Weiter" to 1
+            Regex("delete|lösch|loesch|cancel|abbrech|dismiss|close|remove|clear").containsMatchIn(x) -> "Löschen" to 2
+            Regex("stop").containsMatchIn(x) -> "Stopp" to 2
+            Regex("reset|neustart|restart|zurücksetz").containsMatchIn(x) -> "Neu" to 0
+            Regex("lap|runde").containsMatchIn(x) -> "Runde" to 0
+            alt.isNotBlank() && !Regex("root|container|layout|content|parent|wrapper|icon|image|text|title|time|chrono").containsMatchIn(x) -> alt.take(14) to 0
+            else -> null
+        }
+    }
 
     @Suppress("DEPRECATION")
     private fun inspectViews(s: StatusBarNotification): Cv? {
@@ -193,8 +209,11 @@ class Notifs : NotificationListenerService() {
         val rvs = listOfNotNull(n.bigContentView, n.contentView, n.headsUpContentView)
         for (rv in rvs) {
             try {
-                val v = rv.apply(applicationContext, android.widget.FrameLayout(this))
+                // Eigener Handler: Klicks auf Tasten der Uhr-Ansicht lösen deren PendingIntent direkt aus
+                val handler = android.widget.RemoteViews.InteractionHandler { _, pi, _ -> try { pi.send() } catch (_: Throwable) {}; true }
+                val v = rv.apply(applicationContext, android.widget.FrameLayout(this), handler)
                 val texts = ArrayList<String>()
+                val btns = ArrayList<Triple<String, Int, android.view.View>>()
                 var chr: android.widget.Chronometer? = null
                 fun walk(x: android.view.View) {
                     if (x is android.widget.Chronometer && chr == null) chr = x
@@ -202,6 +221,16 @@ class Notifs : NotificationListenerService() {
                     if (x is android.view.ViewGroup) for (i in 0 until x.childCount) walk(x.getChildAt(i))
                 }
                 walk(v)
+                fun walkBtn(x: android.view.View, root: Boolean) {
+                    if (!root && x.hasOnClickListeners()) {
+                        val cd = x.contentDescription?.toString()?.trim().orEmpty()
+                        val tx = (x as? android.widget.TextView)?.text?.toString()?.trim().orEmpty()
+                        val nm = try { if (x.id != android.view.View.NO_ID) x.resources.getResourceEntryName(x.id) else "" } catch (_: Throwable) { "" }
+                        niceBtn("$cd $tx $nm", cd.ifEmpty { tx })?.let { (l, t) -> if (btns.none { it.first == l }) btns.add(Triple(l, t, x)) }
+                    }
+                    if (x is android.view.ViewGroup) for (i in 0 until x.childCount) walkBtn(x.getChildAt(i), false)
+                }
+                walkBtn(v, true)
                 val c = chr
                 if (c != null || texts.isNotEmpty()) {
                     var running = true
@@ -209,7 +238,7 @@ class Notifs : NotificationListenerService() {
                         val f = android.widget.Chronometer::class.java.getDeclaredField("mStarted"); f.isAccessible = true; running = f.getBoolean(c)
                     } catch (_: Throwable) {}
                     val down = c != null && try { c.isCountDown } catch (_: Throwable) { false }
-                    return Cv(texts, c?.base ?: 0L, down, running, c != null)
+                    return Cv(texts, c?.base ?: 0L, down, running, c != null, btns)
                 }
             } catch (_: Throwable) {}
         }
@@ -230,8 +259,9 @@ class Notifs : NotificationListenerService() {
             } else cv.texts.firstOrNull { timeAny.containsMatchIn(it) } ?: continue
             val icon = try { packageManager.getApplicationIcon(ct.s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
             val a = ct.s.notification.actions.orEmpty()
-            Hub.post(Act("tm:$k", "timer", if (cv.hasChrono && cv.down) "Timer" else if (cv.hasChrono) "Stoppuhr" else "Timer", text, art = icon, pkg = ct.s.packageName,
-                ctl = a.take(2).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }))
+            val ctl = if (cv.btns.isNotEmpty()) cv.btns.take(3).map { (l, t, view) -> Btn(l, t) { try { view.performClick() } catch (_: Throwable) {} } }
+            else a.take(3).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }
+            Hub.post(Act("tm:$k", "timer", if (cv.hasChrono && cv.down) "Timer" else if (cv.hasChrono) "Stoppuhr" else "Timer", text, art = icon, pkg = ct.s.packageName, ctl = ctl))
         }
     }
 
@@ -259,7 +289,7 @@ class Notifs : NotificationListenerService() {
         var cvInfo = ""
         if (clockHint.containsMatchIn(s.packageName)) {
             val cv = inspectViews(s)
-            cvInfo = if (cv == null) " | cv: keine" else " | cv: chrono=${cv.hasChrono} down=${cv.down} run=${cv.running} texts=${cv.texts.take(5)}"
+            cvInfo = if (cv == null) " | cv: keine" else " | cv: chrono=${cv.hasChrono} down=${cv.down} run=${cv.running} texts=${cv.texts.take(5)} tasten=${cv.btns.map { it.first }}"
         }
         NLog.add("${s.packageName.substringAfterLast('.')} cat=${n.category ?: "-"} tpl=$tpl acts=${n.actions?.size ?: 0}$f | $ti | $tx$cvInfo")
     }

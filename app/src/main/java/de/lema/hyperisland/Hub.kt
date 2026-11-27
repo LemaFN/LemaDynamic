@@ -18,11 +18,15 @@ data class Act(
 )
 
 fun pr(k: String) = when (k) { "call" -> 11; "msg" -> 10; "timer" -> 6; "music" -> 5; else -> 3 }
-fun topAct(l: List<Act>) = l.maxWithOrNull(compareBy<Act>({ pr(it.kind) }, { it.t0 }))
+/** Wichtigste Anzeige; eine vom Nutzer gewählte (Hub.sel) hat Vorrang, bis eine Nachricht/ein Anruf eintrifft. */
+fun topAct(l: List<Act>, sel: String? = Hub.sel.value): Act? =
+    l.find { it.id == sel } ?: l.maxWithOrNull(compareBy<Act>({ pr(it.kind) }, { it.t0 }))
 
 object Hub {
     val acts = MutableStateFlow<List<Act>>(emptyList())
     val exp = MutableStateFlow(false)
+    /** Vom Nutzer gewählte Anzeige bei mehreren gleichzeitigen (Wischen / Symbole). null = automatisch nach Wichtigkeit. */
+    val sel = MutableStateFlow<String?>(null)
     val pulls = MutableStateFlow(0)
     /** true = Island komplett ausblenden (z. B. Querformat). */
     val hidden = MutableStateFlow(false)
@@ -42,7 +46,7 @@ object Hub {
         if (!Cfg.v.value.allows(a.kind, a.id)) return
         if (muted[a.id] == key(a)) return
         val old = acts.value.find { it.id == a.id }
-        if (old == null && (a.kind == "msg" || a.kind == "call")) exp.value = true
+        if (old == null && (a.kind == "msg" || a.kind == "call")) { exp.value = true; sel.value = null }
         acts.update { l -> l.filter { it.id != a.id } + a.copy(t0 = old?.t0 ?: a.t0) }
         if (a.ttl > 0) {
             ttlJobs.remove(a.id)?.cancel()
@@ -50,7 +54,16 @@ object Hub {
         }
     }
 
+    /** Zur nächsten (dir = 1) oder vorherigen Anzeige wechseln, wenn mehrere laufen. */
+    fun cycle(dir: Int = 1) {
+        val l = acts.value.sortedWith(compareByDescending<Act> { pr(it.kind) }.thenByDescending { it.t0 })
+        if (l.size < 2) return
+        val i = l.indexOfFirst { it.id == topAct(l)?.id }.coerceAtLeast(0)
+        sel.value = l[((i + dir) % l.size + l.size) % l.size].id
+    }
+
     fun drop(id: String) {
+        if (sel.value == id) sel.value = null
         ttlJobs.remove(id)?.cancel()
         acts.update { l -> l.filter { it.id != id } }
     }
@@ -67,6 +80,7 @@ object Hub {
     fun clearTests() {
         tj?.cancel()
         listOf("msg", "call", "timer", "tdone", "chg", "bt", "demo", "demo-music").forEach { drop(it) }
+        sel.value = null
     }
 
     fun pull(pkg: String) {

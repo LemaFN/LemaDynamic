@@ -172,8 +172,8 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         addTouchWindow()
         watchAudio()
         scope.launch {
-            combine(Hub.acts, Hub.exp, Hub.hidden, Cfg.v) { l, e, hd, c ->
-                val top = if (hd) null else topAct(l)
+            combine(Hub.acts, Hub.exp, Hub.hidden, Cfg.v, Hub.sel) { l, e, hd, c, sl ->
+                val top = if (hd) null else topAct(l, sl)
                 val (w, h) = if (top != null) dims(top, e, c.compactW.toInt()) else 0 to 0
                 WinState(top != null, e && top != null, w, h, c)
             }
@@ -298,7 +298,9 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
                 MotionEvent.ACTION_UP -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
-                    if (kotlin.math.abs(dx) > 90 * d && kotlin.math.abs(dx) > kotlin.math.abs(dy)) topAct(Hub.acts.value)?.let { Hub.dismiss(it) }
+                    val multi = Hub.acts.value.size >= 2
+                    if (multi && kotlin.math.abs(dx) > 45 * d && kotlin.math.abs(dx) > kotlin.math.abs(dy)) Hub.cycle(if (dx < 0) 1 else -1)
+                    else if (!multi && kotlin.math.abs(dx) > 90 * d && kotlin.math.abs(dx) > kotlin.math.abs(dy)) topAct(Hub.acts.value)?.let { Hub.dismiss(it) }
                     else if (dy > 30 * d && kotlin.math.abs(dy) > kotlin.math.abs(dx)) Hub.exp.value = true
                 }
             }

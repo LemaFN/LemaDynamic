@@ -115,7 +115,8 @@ private fun IslandBody(cfg: Config) {
     val exp by Hub.exp.collectAsState()
     val pulls by Hub.pulls.collectAsState()
     val hidden by Hub.hidden.collectAsState()
-    val top = if (hidden) null else topAct(list)
+    val sel by Hub.sel.collectAsState()
+    val top = if (hidden) null else topAct(list, sel)
     val live = top != null
 
     // Letzte Aktivität merken, damit die Island beim Verschwinden sauber einschrumpft statt zu springen.
@@ -129,7 +130,7 @@ private fun IslandBody(cfg: Config) {
     val show by animateFloatAsState(if (live) 1f else 0f, tween(if (live) 200 else 320), label = "show")
     val glass = animateFloatAsState(if (exp && live) 1f else 0f, tween(320), label = "glass")
 
-    LaunchedEffect(top?.id) { Hub.exp.value = top?.kind == "msg" || top?.kind == "call" }
+    LaunchedEffect(top?.id) { if (top?.kind == "msg" || top?.kind == "call") Hub.exp.value = true }
     // App wurde minimiert: Icon fliegt (Fly-Fenster) -> Island öffnet sich kurz, "schluckt" und klappt wieder zu.
     LaunchedEffect(pulls) {
         if (pulls > 0) {
@@ -199,12 +200,14 @@ private fun IslandBody(cfg: Config) {
                             val dx = ox.value
                             val dy = oy.value
                             scope.launch {
-                                if (abs(dx) > dismissPx) {
+                                if (abs(dx) > dismissPx && Hub.acts.value.size < 2) {
                                     ox.animateTo(if (dx > 0) 700f else -700f, tween(160))
                                     Hub.dismiss(act)
                                     ox.snapTo(0f)
                                     oy.snapTo(0f)
                                 } else {
+                                    // Mehrere Anzeigen: seitlich wischen wechselt zur nächsten
+                                    if (abs(dx) > upPx * 1.5f && Hub.acts.value.size >= 2) Hub.cycle(if (dx < 0) 1 else -1)
                                     if (dy < -upPx) Hub.exp.value = false
                                     launch { ox.animateTo(0f, spring(0.6f, 500f)) }
                                     oy.animateTo(0f, spring(0.6f, 500f))
@@ -260,7 +263,8 @@ private fun IslandBody(cfg: Config) {
         ) {
             Crossfade(act.id to exp, animationSpec = tween(170), label = "c") { (id, e) ->
                 val a = list.find { it.id == id } ?: act
-                if (e) Expanded(a) else Compact(a)
+                val others = list.filter { it.id != a.id }.sortedByDescending { pr(it.kind) }.take(3)
+                if (e) Expanded(a, others) else Compact(a, others)
             }
         }
     }
@@ -336,14 +340,18 @@ fun Pill(b: Btn, m: Modifier) {
 }
 
 @Composable
-fun Compact(a: Act) = Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+fun Compact(a: Act, others: List<Act> = emptyList()) = Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
     Lead(a, 24, false)
+    // Weitere laufende Anzeigen: kleine Punkte in ihrer Farbe (seitlich wischen wechselt)
+    if (others.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        others.forEach { Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(col(it.kind))) }
+    }
     if (a.kind == "music") Eq(col(a.kind), a.on)
     else Text(if (a.kind == "msg") a.title else a.sub, color = col(a.kind), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.widthIn(max = 90.dp))
 }
 
 @Composable
-fun Expanded(a: Act) = Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+fun Expanded(a: Act, others: List<Act> = emptyList()) = Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Lead(a, if (a.kind == "music") 60 else 42)
         Column(Modifier.weight(1f)) {
@@ -351,6 +359,12 @@ fun Expanded(a: Act) = Column(Modifier.fillMaxSize().padding(16.dp), verticalArr
             Text(a.sub, color = Color(0xFFB4B4BC), fontSize = 13.sp, maxLines = 2)
         }
         if (a.kind == "music") Eq(col(a.kind), a.on)
+        // Weitere laufende Anzeigen als antippbare Symbole
+        others.forEach { o ->
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(15.dp)).background(col(o.kind).copy(alpha = 0.22f)).clickable { Hub.sel.value = o.id }, Alignment.Center) {
+                Text(ic(o.kind), fontSize = 15.sp)
+            }
+        }
     }
     if (a.kind == "music" || a.prog > 0f) Bar(a.prog, col(a.kind))
     if (a.ctl.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
