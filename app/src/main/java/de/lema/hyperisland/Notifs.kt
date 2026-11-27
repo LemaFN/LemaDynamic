@@ -219,7 +219,7 @@ class Notifs : NotificationListenerService() {
                     else -> null
                 }
             }
-            val m = android.widget.RemoteViews::class.java.getMethod("apply", Context::class.java, android.view.ViewGroup::class.java, hc)
+            val m = android.widget.RemoteViews::class.java.getMethod("apply", android.content.Context::class.java, android.view.ViewGroup::class.java, hc)
             return m.invoke(rv, applicationContext, android.widget.FrameLayout(this), proxy) as android.view.View
         } catch (_: Throwable) {}
         return rv.apply(applicationContext, android.widget.FrameLayout(this))
