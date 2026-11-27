@@ -58,6 +58,8 @@ import kotlin.math.abs
 
 /** Rand (dp) links/rechts/unten um die Island im Fenster, Platz für Schatten und das "Einsaugen"-Bounce. */
 const val M = 22
+/** Höchste ausgeklappte Island (Musik mit Tasten) in dp, bestimmt die feste Fenstergröße. Muss zu dims() passen. */
+const val EXP_MAX_H = 160
 
 fun col(k: String) = Color(when (k) { "music" -> 0xFFFA2D55; "timer" -> 0xFFFF9F0A; "call", "chg" -> 0xFF30D158; "bt" -> 0xFF0A84FF; else -> 0xFF5E9BFF })
 fun ic(k: String) = when (k) { "music" -> "🎵"; "timer" -> "⏱"; "call" -> "📞"; "chg" -> "⚡"; "bt" -> "🎧"; else -> "💬" }

@@ -15,6 +15,10 @@ import android.os.BatteryManager
 import android.os.Build
 import android.view.Display
 import android.view.Gravity
+import android.view.GestureDetector
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -51,8 +55,6 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
     )
     private var view: ComposeView? = null
     private var fg: String? = null
-    private var curW = 0
-    private var curH = 0
 
     private val btSeen = HashMap<String, Long>()
 
@@ -134,42 +136,15 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         }
         view = v
         wm.addView(v, lp)
+        addTouchWindow()
         scope.launch {
             combine(Hub.acts, Hub.exp, Hub.hidden, Cfg.v) { l, e, hd, c ->
-                val (w, h) = if (hd) 0 to 0 else dims(topAct(l), e, c.compactW.toInt())
-                Triple(w, h, c)
+                val top = if (hd) null else topAct(l)
+                val (w, h) = if (top != null) dims(top, e, c.compactW.toInt()) else 0 to 0
+                WinState(top != null, e && top != null, w, h, c)
             }
                 .distinctUntilChanged()
-                .collectLatest { (w, h, c) ->
-                    // Wachsen: Fenster sofort größer, damit die Animation nicht abgeschnitten wird.
-                    // Schrumpfen: erst warten, bis die Feder-Animation durch ist.
-                    if (w * h < curW * curH) delay((450 + 650 * c.wobble).toLong())
-                    curW = w
-                    curH = h
-                    place()
-                    if (w == 0) {
-                        lp.width = 1
-                        lp.height = 1
-                        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    } else {
-                        // Mit Blur: Fenster eng um die Island, sonst wird ein großes Rechteck verwischt
-                        val mg = if (c.blur > 0f) 0 else M
-                        lp.width = ((w * c.scale + 2 * mg) * d).toInt()
-                        lp.height = ((h * c.scale + mg) * d).toInt()
-                        lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                    }
-                    if (Build.VERSION.SDK_INT >= 31) {
-                        // Experimentell: echter Hintergrund-Blur hinter dem (rechteckigen) Fenster, nur wenn aufgeklappt
-                        if (c.blur > 0f && w != 0 && h > 36) {
-                            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                            lp.blurBehindRadius = c.blur.toInt()
-                        } else {
-                            lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                            lp.blurBehindRadius = 0
-                        }
-                    }
-                    try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
-                }
+                .collectLatest { applyWindow(v, it) }
         }
         scope.launch { Cfg.v.collect { Hub.hidden.value = landscape() && it.hideLandscape } }
         scope.launch { Hub.fly.collect { pkg -> launch { playFly(pkg) } } }
@@ -179,6 +154,121 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    private class WinState(val live: Boolean, val exp: Boolean, val w: Int, val h: Int, val c: Config)
+
+    private var shown = false
+    private var tv: View? = null
+    private val tlp = WindowManager.LayoutParams(
+        1, 1, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+        PixelFormat.TRANSLUCENT
+    )
+
+    /**
+     * Das Inselfenster ändert seine Größe NICHT, solange die Island sichtbar ist (feste Größe für die ausgeklappte Island).
+     * Grund: Bei jeder Größenänderung zeigt das System kurz den alten Inhalt am neuen Rahmen, die Island ruckte dadurch zur Seite.
+     * Eingeklappt ist das große Fenster nicht berührbar, Tippen übernimmt ein kleines, unsichtbares Touch-Fenster über der Pille.
+     */
+    private suspend fun applyWindow(v: ComposeView, st: WinState) {
+        val c = st.c
+        val d = resources.displayMetrics.density
+        val nt = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        if (!st.live) {
+            // Aus: erst die Ausblend-Animation laufen lassen, dann Fenster auf 1x1
+            if (shown) delay((450 + 650 * c.wobble).toLong())
+            shown = false
+            place()
+            lp.width = 1
+            lp.height = 1
+            lp.flags = lp.flags or nt
+            lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+            lp.blurBehindRadius = 0
+            try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+            touchWindow(false)
+            return
+        }
+        shown = true
+        place()
+        val blur = c.blur > 0f && Build.VERSION.SDK_INT >= 31
+        if (c.blur > 0f) {
+            // Experimentell (Blur): Fenster eng um die Island, dafür mit dem alten Verhalten (Größe folgt der Island)
+            lp.width = (st.w * c.scale * d).toInt()
+            lp.height = (st.h * c.scale * d).toInt()
+            lp.flags = lp.flags and nt.inv()
+            touchWindow(false)
+        } else {
+            val bw = maxOf(344f, c.compactW)
+            lp.width = ((bw * c.scale + 2 * M) * d).toInt()
+            lp.height = ((EXP_MAX_H * c.scale + M) * d).toInt()
+            lp.flags = if (st.exp) lp.flags and nt.inv() else lp.flags or nt
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            if (blur && st.h > 36) {
+                lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                lp.blurBehindRadius = c.blur.toInt()
+            } else {
+                lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+                lp.blurBehindRadius = 0
+            }
+        }
+        try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+        if (c.blur <= 0f) touchWindow(!st.exp)
+    }
+
+    /** Unsichtbares Fenster genau über der eingeklappten Pille: Tippen, Halten, Wischen. */
+    private fun touchWindow(on: Boolean) {
+        val t = tv ?: return
+        val c = Cfg.v.value
+        val d = resources.displayMetrics.density
+        val nt = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        if (on) {
+            tlp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            tlp.x = lp.x
+            tlp.y = lp.y
+            tlp.width = (c.compactW * c.scale * d).toInt()
+            tlp.height = (36 * c.scale * d).toInt()
+            tlp.flags = tlp.flags and nt.inv()
+        } else {
+            tlp.width = 1
+            tlp.height = 1
+            tlp.flags = tlp.flags or nt
+        }
+        if (Build.VERSION.SDK_INT >= 28) tlp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        try { wm.updateViewLayout(t, tlp) } catch (_: Exception) {}
+    }
+
+    private fun addTouchWindow() {
+        val t = View(this)
+        val d = resources.displayMetrics.density
+        val gd = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent) = true
+            override fun onSingleTapUp(e: MotionEvent): Boolean { Hub.exp.value = !Hub.exp.value; return true }
+            override fun onLongPress(e: MotionEvent) {
+                if (Cfg.v.value.haptic) t.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                Hub.exp.value = true
+            }
+        })
+        var downX = 0f
+        var downY = 0f
+        t.setOnTouchListener { _, e ->
+            gd.onTouchEvent(e)
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY }
+                MotionEvent.ACTION_UP -> {
+                    val dx = e.rawX - downX
+                    val dy = e.rawY - downY
+                    if (kotlin.math.abs(dx) > 90 * d && kotlin.math.abs(dx) > kotlin.math.abs(dy)) topAct(Hub.acts.value)?.let { Hub.dismiss(it) }
+                    else if (dy > 30 * d && kotlin.math.abs(dy) > kotlin.math.abs(dx)) Hub.exp.value = true
+                }
+            }
+            true
+        }
+        tlp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        try { wm.addView(t, tlp); tv = t } catch (_: Exception) {}
     }
 
     /** Icon der minimierten App fliegt in die Island (eigenes, nicht berührbares Vollbild-Fenster, nur für die Dauer der Animation). */
@@ -215,6 +305,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         Hub.hidden.value = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE && Cfg.v.value.hideLandscape
         place()
         try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+        if (tlp.width > 1) touchWindow(true)
     }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
@@ -231,6 +322,8 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         try { unregisterReceiver(rx) } catch (_: Exception) {}
         scope.cancel()
         view?.let { try { wm.removeView(it) } catch (_: Exception) {} }
+        tv?.let { try { wm.removeView(it) } catch (_: Exception) {} }
+        tv = null
         view = null
         reg.currentState = Lifecycle.State.DESTROYED
         viewModelStore.clear()
