@@ -43,6 +43,7 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-27 Claude A: Bluetooth bestätigt im Log ("BT Audio verbunden name=JBL Flip 5"); Anzeige klappt jetzt automatisch auf (Kind bt wie msg/call).
 - 2026-11-27 Claude A: Stoppuhr der Uhr-App: Meldung hat Titel "Stoppuhr", Text "Zeitverhalten" (keine Zeit) -> Zeit steckt in RemoteViews; Ansichts-Auslese greift jetzt, wenn Titel/Text keine Zeit enthalten (nicht nur bei leerem Titel). Titel der Meldung wird als Name genutzt.
 - 2026-11-27 Claude A: Mehrere Anzeigen gleichzeitig (Hub.sel/Hub.cycle: seitlich wischen oder Symbole im ausgeklappten Zustand, Punkte im eingeklappten); Uhr-Timer-Tasten (Pause/Weiter/Stopp/Löschen) aus den klickbaren Views der RemoteViews (InteractionHandler -> PendingIntent.send). Ungetestet.
 - 2026-11-27 Claude A: Bluetooth: zusätzlich AudioDeviceCallback (ohne Erlaubnis) + A2DP/Headset-Broadcasts, alle Ereignisse im NLog ("BT ..."); Zeitformat mm:ss.cc für Stoppuhr; cv-Info im Log für alle Uhr-Meldungen. OFFEN: Stoppuhr der Uhr-App wird noch nicht angezeigt (Timer geht, bestätigt) - Nutzer soll Log nach Stoppuhr-Start schicken.

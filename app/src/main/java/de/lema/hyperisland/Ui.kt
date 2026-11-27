@@ -130,7 +130,7 @@ private fun IslandBody(cfg: Config) {
     val show by animateFloatAsState(if (live) 1f else 0f, tween(if (live) 200 else 320), label = "show")
     val glass = animateFloatAsState(if (exp && live) 1f else 0f, tween(320), label = "glass")
 
-    LaunchedEffect(top?.id) { if (top?.kind == "msg" || top?.kind == "call") Hub.exp.value = true }
+    LaunchedEffect(top?.id) { if (top?.kind == "msg" || top?.kind == "call" || top?.kind == "bt") Hub.exp.value = true }
     // App wurde minimiert: Icon fliegt (Fly-Fenster) -> Island öffnet sich kurz, "schluckt" und klappt wieder zu.
     LaunchedEffect(pulls) {
         if (pulls > 0) {
