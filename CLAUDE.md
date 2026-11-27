@@ -27,7 +27,7 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 ### Offene Bugs
 - **Wackler/Ruck beim Einklappen (Fix in Build nach 0.4.x, noch vom Nutzer zu bestätigen):** Ursache laut Video `Screenrecorder-20261127-072130` (ca. Sekunde 3): Die Pille sprang ~90 dp zur Seite, war halbtransparent und federte in ~100 ms zurück. Das ist der Drag-Offset `ox` in `Ui.kt` (Alpha hängt an |ox|, Rückfeder `spring(0.6, 500)`). Grund: Die Drag-Deltas wurden in lokalen Koordinaten der Island gemessen; klappt die Island unter dem Finger ein (Breite 344 → 236, zentriert), springt das lokale Koordinatensystem. Fix: Drag wird jetzt aus Fenster-Koordinaten (`localToWindow`) berechnet, absolut statt aufsummiert. Falls es weiter ruckelt: Hypothesen (a) `updateViewLayout` bei Fenster-Verkleinerung, (b) Musik-Aktivität kurz entfernt/neu gesetzt.
 - Früher: dünner Strich beim Einklappen (Feder-Überschwingen), mit Mindestgröße 88 % der Zielgröße entschärft.
-- **Uhr-App-Timer wird nicht angezeigt:** Format der Uhr-Benachrichtigung unbekannt. Heuristik in `Notifs.kt` ist eingebaut; der Nutzer soll in der App unter Diagnose "Log kopieren" und den Text schicken, dann gezielt anpassen.
+- **Uhr-App-Timer (Fix gebaut, vom Nutzer zu bestätigen):** Log vom Gerät: Paket `...alarmclock`, ongoing, ohne Kategorie/Template, Titel und Text LEER, also Zeit steckt in einer eigenen RemoteViews-Ansicht. `Notifs.kt` liest jetzt `contentView/bigContentView` per `RemoteViews.apply` aus (Chronometer + TextViews, `inspectViews`) und zeigt den Timer per `customTick()` (1-s-Tick). Das Log in der Diagnose zeigt für Uhr-Pakete zusätzlich `cv: chrono=… texts=…`. Pausiert-Erkennung nur per Reflection auf `Chronometer.mStarted` (kann auf Android 16 gesperrt sein, dann gilt "läuft").
 - **Echte Lichtbrechung des Hintergrunds** nicht möglich (eine App kann den Hintergrund hinter ihrem Fenster nicht lesen). Nur Rand-Effekte per Shader. MediaProjection wäre die einzige Alternative (Akku, Dauer-Hinweis), vom Nutzer nicht gewählt.
 
 ### Zuletzt erledigt
@@ -42,5 +42,6 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-27 Claude A: Notifs.kt: Uhr-Timer aus RemoteViews (Chronometer/Text), Log mit cv-Infos.
 - 2026-11-27 Claude A: Ui.kt: Drag in Fenster-Koordinaten (Fix für seitlichen Ruck nach dem Einklappen).
 - 2026-11-27 Claude A: CLAUDE.md angelegt (Übergabe-Datei).

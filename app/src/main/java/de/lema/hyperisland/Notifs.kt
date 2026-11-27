@@ -40,7 +40,7 @@ class Notifs : NotificationListenerService() {
     }
 
     private val tick = object : Runnable {
-        override fun run() { refresh(); chronos(); h.postDelayed(this, 1000) }
+        override fun run() { refresh(); chronos(); customTick(); h.postDelayed(this, 1000) }
     }
 
     // Sofortige Reaktion auf Play/Pause/Songwechsel, das Sekunden-Polling bleibt nur für den Fortschrittsbalken.
@@ -184,6 +184,57 @@ class Notifs : NotificationListenerService() {
         }
     }
 
+    /** Inhalt einer Benachrichtigung mit eigener Ansicht (RemoteViews), z. B. der Timer der Uhr-App ohne Titel/Text. */
+    private class Cv(val texts: List<String>, val base: Long, val down: Boolean, val running: Boolean, val hasChrono: Boolean)
+
+    @Suppress("DEPRECATION")
+    private fun inspectViews(s: StatusBarNotification): Cv? {
+        val n = s.notification
+        val rvs = listOfNotNull(n.bigContentView, n.contentView, n.headsUpContentView)
+        for (rv in rvs) {
+            try {
+                val v = rv.apply(applicationContext, android.widget.FrameLayout(this))
+                val texts = ArrayList<String>()
+                var chr: android.widget.Chronometer? = null
+                fun walk(x: android.view.View) {
+                    if (x is android.widget.Chronometer && chr == null) chr = x
+                    if (x is android.widget.TextView) { val t = x.text?.toString()?.trim().orEmpty(); if (t.isNotEmpty()) texts.add(t) }
+                    if (x is android.view.ViewGroup) for (i in 0 until x.childCount) walk(x.getChildAt(i))
+                }
+                walk(v)
+                val c = chr
+                if (c != null || texts.isNotEmpty()) {
+                    var running = true
+                    if (c != null) try {
+                        val f = android.widget.Chronometer::class.java.getDeclaredField("mStarted"); f.isAccessible = true; running = f.getBoolean(c)
+                    } catch (_: Throwable) {}
+                    val down = c != null && try { c.isCountDown } catch (_: Throwable) { false }
+                    return Cv(texts, c?.base ?: 0L, down, running, c != null)
+                }
+            } catch (_: Throwable) {}
+        }
+        return null
+    }
+
+    private class CT(val s: StatusBarNotification, val cv: Cv)
+    private val customs = HashMap<String, CT>()
+
+    private fun customTick() {
+        val now = SystemClock.elapsedRealtime()
+        for ((k, ct) in customs) {
+            val cv = ct.cv
+            val text = if (cv.hasChrono && cv.running) {
+                val ms = if (cv.down) cv.base - now else now - cv.base
+                if (cv.down && ms < -2000) { Hub.drop("tm:$k"); continue }
+                fmt((ms / 1000).coerceAtLeast(0))
+            } else cv.texts.firstOrNull { timeAny.containsMatchIn(it) } ?: continue
+            val icon = try { packageManager.getApplicationIcon(ct.s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
+            val a = ct.s.notification.actions.orEmpty()
+            Hub.post(Act("tm:$k", "timer", if (cv.hasChrono && cv.down) "Timer" else if (cv.hasChrono) "Stoppuhr" else "Timer", text, art = icon, pkg = ct.s.packageName,
+                ctl = a.take(2).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }))
+        }
+    }
+
     private fun appLabel(pkg: String) = try {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     } catch (_: Exception) { pkg }
@@ -205,7 +256,12 @@ class Notifs : NotificationListenerService() {
         val tpl = ex.getString(Notification.EXTRA_TEMPLATE)?.substringAfterLast('$')?.substringAfterLast('.') ?: "-"
         val ti = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.take(24) ?: ""
         val tx = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.take(28) ?: ""
-        NLog.add("${s.packageName.substringAfterLast('.')} cat=${n.category ?: "-"} tpl=$tpl acts=${n.actions?.size ?: 0}$f | $ti | $tx")
+        var cvInfo = ""
+        if (ti.isBlank() && tx.isBlank() && clockHint.containsMatchIn(s.packageName)) {
+            val cv = inspectViews(s)
+            cvInfo = if (cv == null) " | cv: keine" else " | cv: chrono=${cv.hasChrono} down=${cv.down} run=${cv.running} texts=${cv.texts.take(5)}"
+        }
+        NLog.add("${s.packageName.substringAfterLast('.')} cat=${n.category ?: "-"} tpl=$tpl acts=${n.actions?.size ?: 0}$f | $ti | $tx$cvInfo")
     }
 
     override fun onNotificationPosted(s: StatusBarNotification) {
@@ -216,6 +272,12 @@ class Notifs : NotificationListenerService() {
         if (chrono.remove(s.key) != null) Hub.drop("tm:${s.key}")
         if (looksLikeMedia(n)) { mediaN = s; refresh(); return }
         val ex = n.extras
+        if (clockHint.containsMatchIn(s.packageName) && n.flags and Notification.FLAG_ONGOING_EVENT != 0 && n.category != Notification.CATEGORY_ALARM &&
+            ex.getCharSequence(Notification.EXTRA_TITLE).isNullOrBlank() && ex.getCharSequence(Notification.EXTRA_TEXT).isNullOrBlank()) {
+            // Timer der Uhr-App: Zeit steckt in einer eigenen Ansicht, nicht in Titel/Text
+            val cv = inspectViews(s)
+            if (cv != null) { customs[s.key] = CT(s, cv); customTick(); return }
+        }
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
         val text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val icon = try { packageManager.getApplicationIcon(s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
@@ -283,6 +345,7 @@ class Notifs : NotificationListenerService() {
     override fun onNotificationRemoved(s: StatusBarNotification) {
         if (mediaN?.key == s.key) { mediaN = null; refresh() }
         lastShown.remove(s.key)
+        customs.remove(s.key)
         Hub.drop("tm:${s.key}")
         if (chrono.remove(s.key) != null) Hub.drop("tm:${s.key}")
         when (s.notification.category) {
