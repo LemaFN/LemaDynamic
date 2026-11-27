@@ -137,6 +137,12 @@ fun Home() {
             Text("Benachrichtigungszugriff: " + if (!nl) "AUS" else if (Hub.listenerUp) "an, verbunden" else "an, NICHT verbunden", fontSize = 13.sp)
             Text("Glas-Shader: ${Glass.status}", fontSize = 13.sp)
             Text("Aktive Anzeigen: " + Hub.acts.value.joinToString { it.kind + ":" + it.id }.ifEmpty { "keine" }, fontSize = 13.sp)
+            val nlog = remember(n) { NLog.text() }
+            Text("Letzte Benachrichtigungen (Fehlersuche):", fontSize = 13.sp)
+            Text(nlog.ifEmpty { "noch keine" }, fontSize = 10.sp, color = Color(0xFFB4B4BC))
+            if (nlog.isNotEmpty()) Tb("Log kopieren", Modifier.fillMaxWidth()) {
+                (c.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Log", nlog))
+            }
             if (crash != null) {
                 Text("Letzter Absturz:", fontSize = 13.sp, color = Color(0xFFFF8A80))
                 Text(crash.take(1500), fontSize = 10.sp, color = Color(0xFFB4B4BC))

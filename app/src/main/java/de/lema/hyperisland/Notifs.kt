@@ -188,15 +188,50 @@ class Notifs : NotificationListenerService() {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     } catch (_: Exception) { pkg }
 
+    private val lastShown = HashMap<String, String>()
+    private val timeSec = Regex("\\d{1,2}:\\d{2}:\\d{2}")
+    private val timeAny = Regex("\\d{1,2}:\\d{2}(:\\d{2})?")
+    private val timerWord = Regex("(?i)(timer|stoppuhr|stopwatch)")
+
+    private fun mediaPkgs(): Set<String> = (watched.map { it.packageName } + listOfNotNull(mediaN?.packageName)).toSet()
+
+    private fun log(s: StatusBarNotification) {
+        val n = s.notification
+        val ex = n.extras
+        val f = StringBuilder()
+        if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) f.append(" ongoing")
+        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) f.append(" summary")
+        if (ex.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)) f.append(if (ex.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN)) " chrono-down" else " chrono-up")
+        val tpl = ex.getString(Notification.EXTRA_TEMPLATE)?.substringAfterLast('$')?.substringAfterLast('.') ?: "-"
+        val ti = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.take(24) ?: ""
+        val tx = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.take(28) ?: ""
+        NLog.add("${s.packageName.substringAfterLast('.')} cat=${n.category ?: "-"} tpl=$tpl acts=${n.actions?.size ?: 0}$f | $ti | $tx")
+    }
+
     override fun onNotificationPosted(s: StatusBarNotification) {
         val n = s.notification
         if (s.packageName == packageName) return
+        log(s)
         if (isChrono(n, s.packageName)) { chrono[s.key] = s; chronos(); return }
         if (chrono.remove(s.key) != null) Hub.drop("tm:${s.key}")
         if (looksLikeMedia(n)) { mediaN = s; refresh(); return }
-        val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
-        val text = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        val ex = n.extras
+        val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
+        val text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val icon = try { packageManager.getApplicationIcon(s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
+
+        // Uhr-App: laufender Timer/Stoppuhr, der seine Zeit als Text aktualisiert (kein Chronometer)
+        if (clockHint.containsMatchIn(s.packageName) && n.flags and Notification.FLAG_ONGOING_EVENT != 0 && n.category != Notification.CATEGORY_ALARM) {
+            val named = timerWord.containsMatchIn("$title $text")
+            val tm = timeSec.find(text) ?: timeSec.find(title) ?: if (named) (timeAny.find(text) ?: timeAny.find(title)) else null
+            if (tm != null) {
+                val a = n.actions.orEmpty()
+                Hub.post(Act("tm:${s.key}", "timer", if (named) title else "Timer", tm.value, art = icon, pkg = s.packageName,
+                    ctl = a.take(2).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }))
+                return
+            }
+        }
+
         if (n.category == Notification.CATEGORY_CALL || n.category == Notification.CATEGORY_ALARM) {
             val isCall = n.category == Notification.CATEGORY_CALL
             val a = n.actions.orEmpty()
@@ -208,15 +243,47 @@ class Notifs : NotificationListenerService() {
         val rk = Ranking()
         if (currentRanking.getRanking(s.key, rk) && rk.importance < NotificationManager.IMPORTANCE_DEFAULT) return
         if (n.visibility == Notification.VISIBILITY_SECRET) return
+
+        // Nur frische Nachrichten: Apps wie Telegram posten ältere Benachrichtigungen erneut, das zeigte alte Nachrichten an
+        val now = System.currentTimeMillis()
+        if (n.`when` > 0 && now - n.`when` > 60_000) return
+        var t2 = title
+        var x2 = text
+        // Chat-Benachrichtigungen: die NEUESTE Nachricht samt Absender nehmen
+        @Suppress("DEPRECATION")
+        val last = ex.getParcelableArray(Notification.EXTRA_MESSAGES)?.lastOrNull() as? android.os.Bundle
+        if (last != null) {
+            val body = last.getCharSequence("text")?.toString()
+            val sender = last.getCharSequence("sender")?.toString()
+            val tm = last.getLong("time", 0L)
+            if (tm > 0 && now - tm > 60_000) return
+            if (!body.isNullOrBlank()) {
+                x2 = body
+                if (!sender.isNullOrBlank() && sender != title) t2 = "$sender ($title)"
+            }
+        }
+        // Gleicher Inhalt wie zuletzt für diese Benachrichtigung (z. B. bloßes Aktualisieren): nicht erneut zeigen
+        val sig = "${n.`when`}|$t2|$x2"
+        if (lastShown[s.key] == sig) return
+        lastShown[s.key] = sig
+
         // Privatsphäre: auf dem Sperrbildschirm keinen Inhalt zeigen, außer die App erlaubt es öffentlich
         val locked = getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
         val hide = Cfg.v.value.privacy && locked && n.visibility != Notification.VISIBILITY_PUBLIC
-        Hub.post(Act("msg", "msg", if (hide) appLabel(s.packageName) else title, if (hide) "Neue Nachricht" else text,
-            ttl = 6000, art = icon, pkg = s.packageName, ctl = listOf(Btn("Öffnen") { go(n.contentIntent) })))
+        val shownTitle = if (hide) appLabel(s.packageName) else t2
+        val shownText = if (hide) "Neue Nachricht" else x2
+        // Kurz warten: Player melden sich oft mit einer Start-Benachrichtigung ("Musik-Player"), kurz bevor ihre MediaSession da ist
+        h.postDelayed({
+            val chat = n.category == Notification.CATEGORY_MESSAGE || n.category == Notification.CATEGORY_EMAIL
+            if (!chat && s.packageName in mediaPkgs()) return@postDelayed
+            Hub.post(Act("msg", "msg", shownTitle, shownText, ttl = 6000, art = icon, pkg = s.packageName, ctl = listOf(Btn("Öffnen") { go(n.contentIntent) })))
+        }, 500L)
     }
 
     override fun onNotificationRemoved(s: StatusBarNotification) {
         if (mediaN?.key == s.key) { mediaN = null; refresh() }
+        lastShown.remove(s.key)
+        Hub.drop("tm:${s.key}")
         if (chrono.remove(s.key) != null) Hub.drop("tm:${s.key}")
         when (s.notification.category) {
             Notification.CATEGORY_CALL -> Hub.drop("call")
