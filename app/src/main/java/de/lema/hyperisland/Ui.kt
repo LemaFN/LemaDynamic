@@ -83,8 +83,8 @@ private class IslandShape(private val maxDp: Float) : Shape {
 /** Größe wird erst in der Layout-Phase gelesen: Animation kostet keine Recomposition pro Frame. */
 private fun Modifier.animSize(w: State<Dp>, h: State<Dp>) = layout { m, _ ->
     // Die Feder kann beim schnellen Auf-/Zuklappen mit Restschwung unter 0 schießen (Absturz: height(-2)), daher nach unten begrenzen
-    val pw = w.value.roundToPx().coerceAtLeast(1)
-    val ph = h.value.roundToPx().coerceAtLeast(1)
+    val pw = w.value.roundToPx().coerceAtLeast(100.dp.roundToPx())
+    val ph = h.value.roundToPx().coerceAtLeast(26.dp.roundToPx())
     val p = m.measure(Constraints.fixed(pw, ph))
     layout(pw, ph) { p.place(0, 0) }
 }
@@ -130,7 +130,7 @@ private fun IslandBody(cfg: Config) {
     LaunchedEffect(exp, top?.id) { if (exp && top?.kind != "call") { delay((cfg.holdSec * 1000).toLong()); Hub.exp.value = false } }
 
     val (tw, th) = if (shown && live && act != null) dims(act, exp, cfg.compactW.toInt()) else 126 to 36
-    val sp = spring<Dp>(dampingRatio = 0.9f - 0.55f * cfg.wobble, stiffness = 480f - 230f * cfg.wobble)
+    val sp = spring<Dp>(dampingRatio = 0.88f - 0.38f * cfg.wobble, stiffness = 480f - 230f * cfg.wobble)
     val w = animateDpAsState(tw.dp, sp, label = "w")
     val h = animateDpAsState(th.dp, sp, label = "h")
 
