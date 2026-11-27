@@ -281,7 +281,8 @@ class Notifs : NotificationListenerService() {
             val a = ct.s.notification.actions.orEmpty()
             val ctl = if (cv.btns.isNotEmpty()) cv.btns.take(3).map { (l, t, view) -> Btn(l, t) { try { view.performClick() } catch (_: Throwable) {} } }
             else a.take(3).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }
-            Hub.post(Act("tm:$k", "timer", if (cv.hasChrono && cv.down) "Timer" else if (cv.hasChrono) "Stoppuhr" else "Timer", text, art = icon, pkg = ct.s.packageName, ctl = ctl))
+            val nt = ct.s.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() }
+            Hub.post(Act("tm:$k", "timer", nt ?: if (cv.hasChrono && cv.down) "Timer" else if (cv.hasChrono) "Stoppuhr" else "Timer", text, art = icon, pkg = ct.s.packageName, ctl = ctl))
         }
     }
 
@@ -323,8 +324,8 @@ class Notifs : NotificationListenerService() {
         if (looksLikeMedia(n)) { mediaN = s; refresh(); return }
         val ex = n.extras
         if (clockHint.containsMatchIn(s.packageName) && n.flags and Notification.FLAG_ONGOING_EVENT != 0 && n.category != Notification.CATEGORY_ALARM &&
-            ex.getCharSequence(Notification.EXTRA_TITLE).isNullOrBlank() && ex.getCharSequence(Notification.EXTRA_TEXT).isNullOrBlank()) {
-            // Timer der Uhr-App: Zeit steckt in einer eigenen Ansicht, nicht in Titel/Text
+            !timeAny.containsMatchIn("${ex.getCharSequence(Notification.EXTRA_TITLE)} ${ex.getCharSequence(Notification.EXTRA_TEXT)}")) {
+            // Timer/Stoppuhr der Uhr-App: Zeit steckt in einer eigenen Ansicht, nicht in Titel/Text
             val cv = inspectViews(s)
             if (cv != null) { customs[s.key] = CT(s, cv); customTick(); return }
         }
