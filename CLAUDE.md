@@ -43,6 +43,7 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-27 Claude A: Bluetooth: zusätzlich AudioDeviceCallback (ohne Erlaubnis) + A2DP/Headset-Broadcasts, alle Ereignisse im NLog ("BT ..."); Zeitformat mm:ss.cc für Stoppuhr; cv-Info im Log für alle Uhr-Meldungen. OFFEN: Stoppuhr der Uhr-App wird noch nicht angezeigt (Timer geht, bestätigt) - Nutzer soll Log nach Stoppuhr-Start schicken.
 - 2026-11-27 Claude A: Wobble wieder voll (Dämpfung 0.9-0.55*wobble), Unterschwingen nur weich begrenzt (softFloor), Fenster mit mehr Rand (44/56 dp) gegen Abschneiden.
 - 2026-11-27 Claude A: IslandA11y.kt: feste Fenstergröße + Touch-Fenster (gegen seitlichen Ruck), Ui.kt: EXP_MAX_H.
 - 2026-11-27 Claude A: Notifs.kt: Uhr-Timer aus RemoteViews (Chronometer/Text), Log mit cv-Infos.

@@ -240,8 +240,8 @@ class Notifs : NotificationListenerService() {
     } catch (_: Exception) { pkg }
 
     private val lastShown = HashMap<String, String>()
-    private val timeSec = Regex("\\d{1,2}:\\d{2}:\\d{2}")
-    private val timeAny = Regex("\\d{1,2}:\\d{2}(:\\d{2})?")
+    private val timeSec = Regex("\\d{1,2}:\\d{2}[:.,]\\d{1,2}")
+    private val timeAny = Regex("\\d{1,2}:\\d{2}([:.,]\\d{1,2})?")
     private val timerWord = Regex("(?i)(timer|stoppuhr|stopwatch)")
 
     private fun mediaPkgs(): Set<String> = (watched.map { it.packageName } + listOfNotNull(mediaN?.packageName)).toSet()
@@ -257,7 +257,7 @@ class Notifs : NotificationListenerService() {
         val ti = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.take(24) ?: ""
         val tx = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.take(28) ?: ""
         var cvInfo = ""
-        if (ti.isBlank() && tx.isBlank() && clockHint.containsMatchIn(s.packageName)) {
+        if (clockHint.containsMatchIn(s.packageName)) {
             val cv = inspectViews(s)
             cvInfo = if (cv == null) " | cv: keine" else " | cv: chrono=${cv.hasChrono} down=${cv.down} run=${cv.running} texts=${cv.texts.take(5)}"
         }

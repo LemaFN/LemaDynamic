@@ -58,24 +58,57 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
 
     private val btSeen = HashMap<String, Long>()
 
+    /** Gemeinsame Stelle für alle Bluetooth-Quellen (Broadcasts und Audiogeräte). Entprellt und zeigt die Island. */
+    private fun btEvent(name: String?, connected: Boolean, key: String, src: String) {
+        NLog.add("BT $src ${if (connected) "verbunden" else "getrennt"} name=${name ?: "?"}")
+        val now = System.currentTimeMillis()
+        val k = key + connected
+        // Mehrere Quellen und Profile melden dasselbe Ereignis: Wiederholungen innerhalb 5 s ignorieren
+        if (now - (btSeen[k] ?: 0L) < 5000) return
+        btSeen[k] = now
+        Hub.post(Act("bt", "bt", name?.takeIf { it.isNotBlank() } ?: "Bluetooth-Gerät", if (connected) "Verbunden" else "Getrennt", ttl = 4000))
+    }
+
     private fun bt(i: Intent) {
-        val connected = i.action == BluetoothDevice.ACTION_ACL_CONNECTED
+        val connected = when (i.action) {
+            BluetoothDevice.ACTION_ACL_CONNECTED -> true
+            BluetoothDevice.ACTION_ACL_DISCONNECTED -> false
+            else -> when (i.getIntExtra("android.bluetooth.profile.extra.STATE", -1)) { 2 -> true; 0 -> false; else -> return }
+        }
         val dev = if (Build.VERSION.SDK_INT >= 33) i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         else @Suppress("DEPRECATION") i.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-        val addr = dev?.address ?: "?"
-        val now = System.currentTimeMillis()
-        val key = addr + connected
-        // Manche Geräte (v. a. BLE) melden dasselbe Ereignis mehrfach: Wiederholungen innerhalb 4 s ignorieren
-        if (now - (btSeen[key] ?: 0L) < 4000) return
-        btSeen[key] = now
         val may = Build.VERSION.SDK_INT < 31 || checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
         val name = try { if (may) dev?.name else null } catch (_: SecurityException) { null }
-        Hub.post(Act("bt", "bt", name ?: "Bluetooth-Gerät", if (connected) "Verbunden" else "Getrennt", ttl = 4000))
+        btEvent(name, connected, name ?: dev?.address ?: "?", "Broadcast")
+    }
+
+    private var audioReady = 0L
+
+    /** Bluetooth-Audiogeräte (Kopfhörer, Lautsprecher, Auto) über den Audio-Dienst: braucht keine Bluetooth-Erlaubnis. */
+    private fun watchAudio() {
+        val am = getSystemService(android.media.AudioManager::class.java) ?: return
+        fun isBt(t: Int) = t == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || t == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            (Build.VERSION.SDK_INT >= 31 && (t == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET || t == android.media.AudioDeviceInfo.TYPE_BLE_SPEAKER))
+        val cb = object : android.media.AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(l: Array<android.media.AudioDeviceInfo>) {
+                // Direkt nach dem Anmelden meldet das System alle schon verbundenen Geräte: überspringen
+                if (System.currentTimeMillis() < audioReady) return
+                l.firstOrNull { isBt(it.type) }?.let { btEvent(it.productName?.toString(), true, it.productName?.toString() ?: "?", "Audio") }
+            }
+            override fun onAudioDevicesRemoved(l: Array<android.media.AudioDeviceInfo>) {
+                if (System.currentTimeMillis() < audioReady) return
+                l.firstOrNull { isBt(it.type) }?.let { btEvent(it.productName?.toString(), false, it.productName?.toString() ?: "?", "Audio") }
+            }
+        }
+        audioReady = System.currentTimeMillis() + 2000
+        try { am.registerAudioDeviceCallback(cb, android.os.Handler(android.os.Looper.getMainLooper())) } catch (_: Exception) {}
     }
 
     private val rx = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
-            if (i.action == BluetoothDevice.ACTION_ACL_CONNECTED || i.action == BluetoothDevice.ACTION_ACL_DISCONNECTED) { bt(i); return }
+            if (i.action == BluetoothDevice.ACTION_ACL_CONNECTED || i.action == BluetoothDevice.ACTION_ACL_DISCONNECTED ||
+                i.action == "android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" ||
+                i.action == "android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED") { bt(i); return }
             if (i.action == Intent.ACTION_POWER_CONNECTED) {
                 val p = getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
                 Hub.post(Act("chg", "chg", "Lädt", "$p %", prog = p / 100f, ttl = 5000))
@@ -137,6 +170,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         view = v
         wm.addView(v, lp)
         addTouchWindow()
+        watchAudio()
         scope.launch {
             combine(Hub.acts, Hub.exp, Hub.hidden, Cfg.v) { l, e, hd, c ->
                 val top = if (hd) null else topAct(l)
@@ -153,6 +187,8 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
             addAction(Intent.ACTION_POWER_DISCONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction("android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED")
+            addAction("android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED")
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
