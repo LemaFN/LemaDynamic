@@ -66,7 +66,7 @@ object Hub {
     /** Räumt die Test-Anzeigen aus den Einstellungen weg, damit sich Tests nicht gegenseitig blockieren. */
     fun clearTests() {
         tj?.cancel()
-        listOf("msg", "call", "timer", "tdone", "chg", "demo", "demo-music").forEach { drop(it) }
+        listOf("msg", "call", "timer", "tdone", "chg", "bt", "demo", "demo-music").forEach { drop(it) }
     }
 
     fun pull(pkg: String) {

@@ -1,6 +1,11 @@
 package de.lema.hyperisland
 
+import android.Manifest
 import android.content.ClipData
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
@@ -67,6 +72,11 @@ fun Home() {
 
         Sec("Einrichtung") {
             Step("Bedienungshilfe „Hyper Island“ aktivieren", acc) { c.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+            if (Build.VERSION.SDK_INT >= 31) {
+                var btOk by remember { mutableStateOf(c.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) }
+                val btReq = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { btOk = it }
+                Step("Bluetooth (Name des Geräts anzeigen)", btOk) { btReq.launch(Manifest.permission.BLUETOOTH_CONNECT) }
+            }
             Step("Benachrichtigungszugriff (Musik, Nachrichten, Timer, Anrufe)", nl) { c.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
             Text("Schalter ausgegraut? Einstellungen → Apps → Hyper Island → ⋮ → Eingeschränkte Einstellungen zulassen.", fontSize = 12.sp, color = Color(0xFFB4B4BC))
         }
@@ -76,6 +86,7 @@ fun Home() {
                 Tb("Nachricht", Modifier.weight(1f)) { Hub.clearTests(); Hub.post(Act("msg", "msg", "Lena", "Kommst du heute zum Server-Treff? 🎮", ttl = 6000, ctl = listOf(Btn("Öffnen") {}))) }
                 Tb("Timer", Modifier.weight(1f)) { Hub.clearTests(); Hub.timer(60) }
                 Tb("Laden", Modifier.weight(1f)) { Hub.clearTests(); Hub.post(Act("chg", "chg", "Lädt", "73 %", prog = 0.73f, ttl = 5000)) }
+                Tb("Bluetooth", Modifier.weight(1f)) { Hub.clearTests(); Hub.post(Act("bt", "bt", "Kopfhörer", "Verbunden", ttl = 4000)) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Tb("Anruf", Modifier.weight(1f)) { Hub.clearTests();
@@ -122,6 +133,7 @@ fun Home() {
             Sw("Timer, Stoppuhr, Wecker", cfg.showTimer) { v -> set { it.copy(showTimer = v) } }
             Sw("Anrufe", cfg.showCall) { v -> set { it.copy(showCall = v) } }
             Sw("Laden", cfg.showCharge) { v -> set { it.copy(showCharge = v) } }
+            Sw("Bluetooth-Geräte", cfg.showBt) { v -> set { it.copy(showBt = v) } }
         }
 
         Sec("Verhalten") {

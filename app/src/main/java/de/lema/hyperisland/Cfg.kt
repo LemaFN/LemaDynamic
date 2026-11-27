@@ -23,6 +23,7 @@ data class Config(
     val showTimer: Boolean = true,
     val showCall: Boolean = true,
     val showCharge: Boolean = true,
+    val showBt: Boolean = true,
     val pull: Boolean = true,           // minimierte App wird eingezogen
     val haptic: Boolean = true,
     val hideLandscape: Boolean = true,
@@ -33,6 +34,7 @@ data class Config(
         kind == "music" -> showMusic
         kind == "call" -> showCall
         kind == "chg" -> showCharge
+        kind == "bt" -> showBt
         else -> showMsg
     }
 }
@@ -66,6 +68,7 @@ object Cfg {
             showTimer = p.getBoolean("showTimer", d.showTimer),
             showCall = p.getBoolean("showCall", d.showCall),
             showCharge = p.getBoolean("showCharge", d.showCharge),
+            showBt = p.getBoolean("showBt", d.showBt),
             pull = p.getBoolean("pull", d.pull),
             haptic = p.getBoolean("haptic", d.haptic),
             hideLandscape = p.getBoolean("hideLandscape", d.hideLandscape),
@@ -83,7 +86,7 @@ object Cfg {
             .putFloat("scale", n.scale).putFloat("offX", n.offX).putFloat("offY", n.offY)
             .putFloat("compactW", n.compactW).putFloat("holdSec", n.holdSec).putFloat("blur", n.blur)
             .putBoolean("showMsg", n.showMsg).putBoolean("showMusic", n.showMusic).putBoolean("showTimer", n.showTimer)
-            .putBoolean("showCall", n.showCall).putBoolean("showCharge", n.showCharge).putBoolean("pull", n.pull)
+            .putBoolean("showCall", n.showCall).putBoolean("showCharge", n.showCharge).putBoolean("showBt", n.showBt).putBoolean("pull", n.pull)
             .putBoolean("haptic", n.haptic).putBoolean("hideLandscape", n.hideLandscape).putBoolean("privacy", n.privacy).putBoolean("refract", n.refract)
             .apply()
     }

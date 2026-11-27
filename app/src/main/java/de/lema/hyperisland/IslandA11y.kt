@@ -1,6 +1,7 @@
 package de.lema.hyperisland
 
 import android.accessibilityservice.AccessibilityService
+import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -53,8 +54,26 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
     private var curW = 0
     private var curH = 0
 
+    private val btSeen = HashMap<String, Long>()
+
+    private fun bt(i: Intent) {
+        val connected = i.action == BluetoothDevice.ACTION_ACL_CONNECTED
+        val dev = if (Build.VERSION.SDK_INT >= 33) i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        else @Suppress("DEPRECATION") i.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+        val addr = dev?.address ?: "?"
+        val now = System.currentTimeMillis()
+        val key = addr + connected
+        // Manche Geräte (v. a. BLE) melden dasselbe Ereignis mehrfach: Wiederholungen innerhalb 4 s ignorieren
+        if (now - (btSeen[key] ?: 0L) < 4000) return
+        btSeen[key] = now
+        val may = Build.VERSION.SDK_INT < 31 || checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        val name = try { if (may) dev?.name else null } catch (_: SecurityException) { null }
+        Hub.post(Act("bt", "bt", name ?: "Bluetooth-Gerät", if (connected) "Verbunden" else "Getrennt", ttl = 4000))
+    }
+
     private val rx = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            if (i.action == BluetoothDevice.ACTION_ACL_CONNECTED || i.action == BluetoothDevice.ACTION_ACL_DISCONNECTED) { bt(i); return }
             if (i.action == Intent.ACTION_POWER_CONNECTED) {
                 val p = getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
                 Hub.post(Act("chg", "chg", "Lädt", "$p %", prog = p / 100f, ttl = 5000))
@@ -157,6 +176,8 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         ContextCompat.registerReceiver(this, rx, IntentFilter().apply {
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 

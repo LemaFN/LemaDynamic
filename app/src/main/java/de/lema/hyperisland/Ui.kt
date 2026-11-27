@@ -57,8 +57,8 @@ import kotlin.math.abs
 /** Rand (dp) links/rechts/unten um die Island im Fenster, Platz für Schatten und das "Einsaugen"-Bounce. */
 const val M = 22
 
-fun col(k: String) = Color(when (k) { "music" -> 0xFFFA2D55; "timer" -> 0xFFFF9F0A; "call", "chg" -> 0xFF30D158; else -> 0xFF5E9BFF })
-fun ic(k: String) = when (k) { "music" -> "🎵"; "timer" -> "⏱"; "call" -> "📞"; "chg" -> "⚡"; else -> "💬" }
+fun col(k: String) = Color(when (k) { "music" -> 0xFFFA2D55; "timer" -> 0xFFFF9F0A; "call", "chg" -> 0xFF30D158; "bt" -> 0xFF0A84FF; else -> 0xFF5E9BFF })
+fun ic(k: String) = when (k) { "music" -> "🎵"; "timer" -> "⏱"; "call" -> "📞"; "chg" -> "⚡"; "bt" -> "🎧"; else -> "💬" }
 
 /** Zielgröße der Island in dp (Breite, Höhe). 0 x 0 = nichts anzeigen. */
 fun dims(a: Act?, e: Boolean, cw: Int = 236): Pair<Int, Int> {
@@ -131,8 +131,13 @@ private fun IslandBody(cfg: Config) {
 
     val (tw, th) = if (shown && live && act != null) dims(act, exp, cfg.compactW.toInt()) else 126 to 36
     val sp = spring<Dp>(dampingRatio = 0.88f - 0.38f * cfg.wobble, stiffness = 480f - 230f * cfg.wobble)
-    val w = animateDpAsState(tw.dp, sp, label = "w")
-    val h = animateDpAsState(th.dp, sp, label = "h")
+    val w0 = animateDpAsState(tw.dp, sp, label = "w")
+    val h0 = animateDpAsState(th.dp, sp, label = "h")
+    // Beim Überschwingen nie weit unter die Zielgröße (sonst schrumpft die Island kurz zu einem dünnen Strich)
+    val wFloor = rememberUpdatedState(tw * 0.88f)
+    val hFloor = rememberUpdatedState(th * 0.88f)
+    val w = remember { derivedStateOf { maxOf(w0.value.value, wFloor.value).dp } }
+    val h = remember { derivedStateOf { maxOf(h0.value.value, hFloor.value).dp } }
 
     val bump = remember { Animatable(1f) }
     LaunchedEffect(pulls) {
