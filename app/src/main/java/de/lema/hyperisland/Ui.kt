@@ -64,6 +64,14 @@ const val EXP_MAX_H = 160
 fun col(k: String) = Color(when (k) { "music" -> 0xFFFA2D55; "timer" -> 0xFFFF9F0A; "call", "chg" -> 0xFF30D158; "bt" -> 0xFF0A84FF; else -> 0xFF5E9BFF })
 fun ic(k: String) = when (k) { "music" -> "🎵"; "timer" -> "⏱"; "call" -> "📞"; "chg" -> "⚡"; "bt" -> "🎧"; else -> "💬" }
 
+/** Liegt der Wert unter dem Ziel, wird die Abweichung weich auf max. frac*Ziel begrenzt. */
+private fun softFloor(v: Float, target: Float, frac: Float): Float {
+    val u = target - v
+    if (u <= 0f) return v
+    val m = target * frac
+    return target - m * kotlin.math.tanh(u / m)
+}
+
 /** Zielgröße der Island in dp (Breite, Höhe). 0 x 0 = nichts anzeigen. */
 fun dims(a: Act?, e: Boolean, cw: Int = 236): Pair<Int, Int> {
     if (a == null) return 0 to 0
@@ -134,14 +142,14 @@ private fun IslandBody(cfg: Config) {
     LaunchedEffect(exp, top?.id) { if (exp && top?.kind != "call") { delay((cfg.holdSec * 1000).toLong()); Hub.exp.value = false } }
 
     val (tw, th) = if (shown && live && act != null) dims(act, exp, cfg.compactW.toInt()) else 126 to 36
-    val sp = spring<Dp>(dampingRatio = 0.88f - 0.38f * cfg.wobble, stiffness = 480f - 230f * cfg.wobble)
+    val sp = spring<Dp>(dampingRatio = 0.9f - 0.55f * cfg.wobble, stiffness = 480f - 230f * cfg.wobble)
     val w0 = animateDpAsState(tw.dp, sp, label = "w")
     val h0 = animateDpAsState(th.dp, sp, label = "h")
-    // Beim Überschwingen nie weit unter die Zielgröße (sonst schrumpft die Island kurz zu einem dünnen Strich)
-    val wFloor = rememberUpdatedState(tw * 0.88f)
-    val hFloor = rememberUpdatedState(th * 0.88f)
-    val w = remember { derivedStateOf { maxOf(w0.value.value, wFloor.value).dp } }
-    val h = remember { derivedStateOf { maxOf(h0.value.value, hFloor.value).dp } }
+    // Unterschwingen beim Einklappen weich begrenzen (tanh): volle Wobbel-Optik, aber nie ein dünner Strich
+    val tgtW = rememberUpdatedState(tw.toFloat())
+    val tgtH = rememberUpdatedState(th.toFloat())
+    val w = remember { derivedStateOf { softFloor(w0.value.value, tgtW.value, 0.30f).dp } }
+    val h = remember { derivedStateOf { softFloor(h0.value.value, tgtH.value, 0.45f).dp } }
 
     val bump = remember { Animatable(1f) }
     LaunchedEffect(pulls) {

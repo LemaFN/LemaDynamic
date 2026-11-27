@@ -202,8 +202,9 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
             touchWindow(false)
         } else {
             val bw = maxOf(344f, c.compactW)
-            lp.width = ((bw * c.scale + 2 * M) * d).toInt()
-            lp.height = ((EXP_MAX_H * c.scale + M) * d).toInt()
+            // Extra Platz rundum, damit das Überschwingen (Wobble) und der Schatten nicht abgeschnitten werden
+            lp.width = ((bw * c.scale + 2 * 44) * d).toInt()
+            lp.height = ((EXP_MAX_H * c.scale + 56) * d).toInt()
             lp.flags = if (st.exp) lp.flags and nt.inv() else lp.flags or nt
         }
         if (Build.VERSION.SDK_INT >= 31) {
