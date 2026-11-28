@@ -46,6 +46,7 @@ object Hub {
         if (!Cfg.v.value.allows(a.kind, a.id)) return
         if (muted[a.id] == key(a)) return
         val old = acts.value.find { it.id == a.id }
+        if (acts.value.isEmpty() && Backdrop.enabled()) Backdrop.pending = true
         if (old == null && (a.kind == "msg" || a.kind == "call" || a.kind == "bt")) { exp.value = true; sel.value = null }
         acts.update { l -> l.filter { it.id != a.id } + a.copy(t0 = old?.t0 ?: a.t0) }
         if (a.ttl > 0) {

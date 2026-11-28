@@ -2,6 +2,8 @@ package de.lema.hyperisland
 
 import android.accessibilityservice.AccessibilityService
 import android.bluetooth.BluetoothDevice
+import android.graphics.Bitmap
+import android.os.SystemClock
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -154,6 +156,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
     )?.activityInfo?.packageName ?: ""
 
     override fun onServiceConnected() {
+        Backdrop.serviceUp = true
         if (view != null) return
         ssc.performAttach()
         ssc.performRestore(null)
@@ -192,6 +195,56 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
+    /** Bildschirmfoto machen und den Ausschnitt hinter dem Island-Fenster als kleines Bitmap ablegen. */
+    private suspend fun grab(winW: Int, winH: Int): Boolean = kotlinx.coroutines.suspendCancellableCoroutine { k ->
+        if (Build.VERSION.SDK_INT < 30) { k.resume(false) {}; return@suspendCancellableCoroutine }
+        try {
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, java.util.concurrent.Executors.newSingleThreadExecutor(),
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(r: AccessibilityService.ScreenshotResult) {
+                        var ok = false
+                        try {
+                            val hb = r.hardwareBuffer
+                            val hw = Bitmap.wrapHardwareBuffer(hb, r.colorSpace)
+                            if (hw != null) {
+                                val sw = hw.copy(Bitmap.Config.ARGB_8888, false)
+                                hw.recycle(); hb.close()
+                                val wl = (sw.width - winW) / 2 + lp.x
+                                val wt = lp.y
+                                val l = maxOf(0, wl); val t = maxOf(0, wt)
+                                val rr = minOf(sw.width, wl + winW); val bb = minOf(sw.height, wt + winH)
+                                if (rr - l > 8 && bb - t > 8) {
+                                    val crop = Bitmap.createBitmap(sw, l, t, rr - l, bb - t)
+                                    val small = Bitmap.createScaledBitmap(crop, maxOf(8, (crop.width * Backdrop.SCALE).toInt()), maxOf(8, (crop.height * Backdrop.SCALE).toInt()), true)
+                                    if (small !== crop) crop.recycle()
+                                    Backdrop.cropX = l - wl; Backdrop.cropY = t - wt
+                                    Backdrop.bmp = small
+                                    Backdrop.lastAt = android.os.SystemClock.elapsedRealtime()
+                                    Backdrop.status = "ok (${small.width}x${small.height})"
+                                    Backdrop.ver++
+                                    ok = true
+                                }
+                                sw.recycle()
+                            } else Backdrop.status = "Foto nicht lesbar"
+                        } catch (t: Throwable) { Backdrop.status = "Fehler: " + (t.message ?: t.toString()).take(120) }
+                        if (k.isActive) k.resume(ok) {}
+                    }
+                    override fun onFailure(code: Int) {
+                        Backdrop.status = when (code) {
+                            AccessibilityService.ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS -> "keine Erlaubnis: Bedienungshilfe aus- und wieder einschalten"
+                            AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> "zu schnell hintereinander"
+                            AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "geschützter Inhalt"
+                            else -> "Fehlercode $code"
+                        }
+                        if (k.isActive) k.resume(false) {}
+                    }
+                })
+        } catch (t: Throwable) {
+            Backdrop.status = "Fehler: " + (t.message ?: t.toString()).take(120)
+            if (k.isActive) k.resume(false) {}
+        }
+    }
+
     private class WinState(val live: Boolean, val exp: Boolean, val w: Int, val h: Int, val c: Config)
 
     private var shown = false
@@ -217,6 +270,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
             // Aus: erst die Ausblend-Animation laufen lassen, dann Fenster auf 1x1
             if (shown) delay((450 + 650 * c.wobble).toLong())
             shown = false
+            Backdrop.pending = false
             place()
             lp.width = 1
             lp.height = 1
@@ -227,8 +281,19 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
             touchWindow(false)
             return
         }
+        val appear = !shown
         shown = true
         place()
+        if (appear) {
+            // Hintergrundfoto, solange das Fenster noch winzig ist (die Island ist darauf nicht zu sehen)
+            val bwDp = maxOf(344f, c.compactW)
+            if (Backdrop.enabled() && SystemClock.elapsedRealtime() - Backdrop.lastAt > 5000) {
+                try {
+                    kotlinx.coroutines.withTimeoutOrNull(600) { grab(((bwDp * c.scale + 88) * d).toInt(), ((EXP_MAX_H * c.scale + 56) * d).toInt()) }
+                } catch (_: Throwable) {}
+            }
+            Backdrop.pending = false
+        }
         val blur = c.blur > 0f && Build.VERSION.SDK_INT >= 31
         if (c.blur > 0f) {
             // Experimentell (Blur): Fenster eng um die Island, dafür mit dem alten Verhalten (Größe folgt der Island)
@@ -358,6 +423,7 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        Backdrop.serviceUp = false
         try { unregisterReceiver(rx) } catch (_: Exception) {}
         scope.cancel()
         view?.let { try { wm.removeView(it) } catch (_: Exception) {} }

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
@@ -125,7 +127,11 @@ private fun IslandBody(cfg: Config) {
     val act = top ?: held
 
     var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(live) { shown = live }
+    LaunchedEffect(live) {
+        // Beim Erscheinen kurz auf das Hintergrundfoto warten (max. 0,7 s), damit die Island sich nicht selbst fotografiert
+        if (live && Backdrop.pending) withTimeoutOrNull(700) { snapshotFlow { Backdrop.pending }.first { !it } }
+        shown = live
+    }
 
     val show by animateFloatAsState(if (live) 1f else 0f, tween(if (live) 200 else 320), label = "show")
     val glass = animateFloatAsState(if (exp && live) 1f else 0f, tween(320), label = "glass")

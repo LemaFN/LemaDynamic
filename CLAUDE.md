@@ -36,6 +36,13 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 - Nachrichten: nur frische (< 60 s), neueste Chat-Nachricht, keine Re-Posts; Start-Meldung von Playern ("Musik-Player") wird nicht mehr als Nachricht gezeigt.
 - Bluetooth-Verbindungen (Kind `bt`, Erlaubnis BLUETOOTH_CONNECT, Schalter `showBt`).
 
+### In Arbeit: echte Lichtbrechung per Bildschirmfoto (Nutzerwunsch, Referenz: Telegram/iOS-Glas = weichgezeichneter Hintergrund + Tönung + helle Kante)
+Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canTakeScreenshot="true"` in `res/xml/a11y.xml`) den Bildschirm lesen, ohne MediaProjection-Dialog. Schritte:
+1. [erledigt, ungetestet] `Backdrop.kt` (Bitmap des Ausschnitts hinter dem Fenster, Skalierung 0.4), `grab()` in `IslandA11y.kt` (Foto beim ERSCHEINEN, solange das Fenster noch 1x1 ist; Ui wartet per `Backdrop.pending` max. 0,7 s), Schalter "Echter Hintergrund" (`Config.backdrop`), Diagnose-Zeile "Hintergrundfoto". Evtl. muss der Nutzer die Bedienungshilfe einmal aus-/einschalten, damit die neue Erlaubnis gilt.
+2. [offen] AGSL-Shader (`GlassShader.kt`): Hintergrund als `uniform shader bg` (BitmapShader), Weichzeichnen (mehrere Taps), Brechung entlang der Kante (SDF-Normale), Farbsäume, Tönung; Position der Island im Fenster per `onGloballyPositioned`.
+3. [offen] Foto auch beim App-Wechsel erneuern (Fenster dafür kurz alpha 0, damit sich die Island nicht selbst fotografiert).
+4. [offen] Feintuning (Stärke-Regler für Brechung/Blur), Fallback wenn kein Foto.
+
 ## Wer arbeitet woran
 | Claude | Dateien / Thema | Seit |
 |---|---|---|
@@ -43,6 +50,7 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-28 Claude A: Schritt 1 Bildschirmfoto-Grundlage (Backdrop.kt, grab(), a11y.xml canTakeScreenshot, Schalter, Diagnose).
 - 2026-11-27 Claude A: Bluetooth bestätigt im Log ("BT Audio verbunden name=JBL Flip 5"); Anzeige klappt jetzt automatisch auf (Kind bt wie msg/call).
 - 2026-11-27 Claude A: Stoppuhr der Uhr-App: Meldung hat Titel "Stoppuhr", Text "Zeitverhalten" (keine Zeit) -> Zeit steckt in RemoteViews; Ansichts-Auslese greift jetzt, wenn Titel/Text keine Zeit enthalten (nicht nur bei leerem Titel). Titel der Meldung wird als Name genutzt.
 - 2026-11-27 Claude A: Mehrere Anzeigen gleichzeitig (Hub.sel/Hub.cycle: seitlich wischen oder Symbole im ausgeklappten Zustand, Punkte im eingeklappten); Uhr-Timer-Tasten (Pause/Weiter/Stopp/Löschen) aus den klickbaren Views der RemoteViews (InteractionHandler -> PendingIntent.send). Ungetestet.
