@@ -29,7 +29,7 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 - Davor: Drag-Deltas in Fensterkoordinaten (`Ui.kt`), gegen Sprünge während eines Wischens.
 - Früher: dünner Strich beim Einklappen (Feder-Überschwingen), mit Mindestgröße 88 % der Zielgröße entschärft.
 - **Uhr-App-Timer (Fix gebaut, vom Nutzer zu bestätigen):** Log vom Gerät: Paket `...alarmclock`, ongoing, ohne Kategorie/Template, Titel und Text LEER, also Zeit steckt in einer eigenen RemoteViews-Ansicht. `Notifs.kt` liest jetzt `contentView/bigContentView` per `RemoteViews.apply` aus (Chronometer + TextViews, `inspectViews`) und zeigt den Timer per `customTick()` (1-s-Tick). Das Log in der Diagnose zeigt für Uhr-Pakete zusätzlich `cv: chrono=… texts=…`. Pausiert-Erkennung nur per Reflection auf `Chronometer.mStarted` (kann auf Android 16 gesperrt sein, dann gilt "läuft").
-- **Echte Lichtbrechung des Hintergrunds** nicht möglich (eine App kann den Hintergrund hinter ihrem Fenster nicht lesen). Nur Rand-Effekte per Shader. MediaProjection wäre die einzige Alternative (Akku, Dauer-Hinweis), vom Nutzer nicht gewählt.
+- **Echte Lichtbrechung:** gelöst über Bildschirmfoto des AccessibilityService (siehe "In Arbeit"), läuft laut Nutzervideo. (Früher hier als "nicht möglich" vermerkt: überholt.)
 
 ### Zuletzt erledigt
 - Absturz bei schnellem Auf-/Zuklappen (negative Höhe) behoben.
@@ -41,7 +41,7 @@ Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canT
 1. [erledigt, ungetestet] `Backdrop.kt` (Bitmap des Ausschnitts hinter dem Fenster, Skalierung 0.4), `grab()` in `IslandA11y.kt` (Foto beim ERSCHEINEN, solange das Fenster noch 1x1 ist; Ui wartet per `Backdrop.pending` max. 0,7 s), Schalter "Echter Hintergrund" (`Config.backdrop`), Diagnose-Zeile "Hintergrundfoto". Evtl. muss der Nutzer die Bedienungshilfe einmal aus-/einschalten, damit die neue Erlaubnis gilt.
 2. [erledigt, ungetestet] AGSL-Shader (`GlassShader.kt`; `Glass.draw(... bgBmp, pos, refr)`, Regler `refrStrength`; bei Foto Deckkraft-Mischung `pow(opacity,1.7)`, Alpha 1): Hintergrund als `uniform shader bg` (BitmapShader), Weichzeichnen (mehrere Taps), Brechung entlang der Kante (SDF-Normale), Farbsäume, Tönung; Position der Island im Fenster per `onGloballyPositioned`.
 3. [erledigt, ungetestet; Nutzer soll prüfen ob das Fenster beim App-Wechsel kurz flackert] Foto auch beim App-Wechsel erneuern (`refreshBackdrop()`, Fenster ~130 ms alpha 0) (Fenster dafür kurz alpha 0, damit sich die Island nicht selbst fotografiert).
-4. [offen] Feintuning (Stärke-Regler für Brechung/Blur), Fallback wenn kein Foto.
+4. [laufend] Nutzervideo 0.4.41 (ff5a87eb): Hintergrundfoto + Kantenbrechung FUNKTIONIEREN auf dem Gerät. Feinschliff: Weichzeichnen war punktiert (6 Taps) -> 13 Taps in 2 Ringen, größerer Radius, dunklerer Tint, Mischung pow(opacity,1.4). Feintuning (Stärke-Regler für Brechung/Blur), Fallback wenn kein Foto.
 
 ## Wer arbeitet woran
 | Claude | Dateien / Thema | Seit |
@@ -50,6 +50,7 @@ Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canT
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-28 Claude A: Glas-Feinschliff: glatteres Weichzeichnen (13 Taps), dunklerer Tint, mehr Deckkraft-Gewicht.
 - 2026-11-28 Claude A: Schritt 3 Hintergrundfoto wird beim App-Wechsel erneuert (refreshBackdrop).
 - 2026-11-28 Claude A: Schritt 2 Shader mit Hintergrundfoto (Brechung, Farbsäume, Unschärfe), Regler "Stärke der Brechung".
 - 2026-11-28 Claude A: Schritt 1 Bildschirmfoto-Grundlage (Backdrop.kt, grab(), a11y.xml canTakeScreenshot, Schalter, Diagnose).
