@@ -43,13 +43,33 @@ Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canT
 3. [erledigt, ungetestet; Nutzer soll prüfen ob das Fenster beim App-Wechsel kurz flackert] Foto auch beim App-Wechsel erneuern (`refreshBackdrop()`, Fenster ~130 ms alpha 0) (Fenster dafür kurz alpha 0, damit sich die Island nicht selbst fotografiert).
 4. [laufend] Nutzervideo 0.4.41 (ff5a87eb): Hintergrundfoto + Kantenbrechung FUNKTIONIEREN auf dem Gerät. Feinschliff: Weichzeichnen war punktiert (6 Taps) -> 13 Taps in 2 Ringen, größerer Radius, dunklerer Tint, Mischung pow(opacity,1.4). Feintuning (Stärke-Regler für Brechung/Blur), Fallback wenn kein Foto.
 
+## Ideen-Liste (Vorbild: fremde Dynamic-Island-App `com.akira.island`, vom Nutzer am 2026-11-28 gezeigt)
+Nur NOTIZEN, noch nichts gebaut. Nur Ideen übernehmen, keinen Code kopieren (Lizenz unbekannt). Nur Dinge, die den bestehenden Code nicht grundlegend umbauen. Reihenfolge = Vorschlag.
+
+**Nutzerwunsch, zuerst:**
+1. **Seitlich wischen bei GESCHLOSSENER Island = Lied vor/zurück** (links = nächstes, rechts = vorheriges). Die Steuerung gibt es schon (`Notifs.kt`: `t.skipToNext()` / `t.skipToPrevious()`, hängt bisher nur an den Knöpfen im ausgeklappten Zustand). Fehlt nur: Wischen damit verbinden, an ZWEI Stellen: Touch-Fenster in `IslandA11y.kt` (`addTouchWindow`, `ACTION_UP`) und Compose-Gesten in `Ui.kt` (`onDragEnd`). Heute bedeutet seitliches Wischen: bei mehreren Anzeigen `Hub.cycle`, bei einer Anzeige wegschieben. Neu: wenn die gezeigte Anzeige Musik ist (`kind == "music"`), Lied wechseln. Dazu Schalter in den Einstellungen "Wischen wechselt: Lieder / Anzeigen" (die Vorlage hat genau diesen Schalter). Kurzes Federn der Island in Wischrichtung als Rückmeldung, optional Vibration (`Cfg.haptic`).
+
+**Gute Kandidaten (kleine, aufsetzbare Ergänzungen):**
+2. **Gesten einstellbar:** Antippen, Doppeltippen, Halten und Wischen frei belegen (z. B. aufklappen / App öffnen / Play-Pause / nichts). Passt zum Wunsch "alles einstellbar".
+3. **Farbe vom Cover:** Rand und leichter Schein der Island nehmen beim Musikhören die Farbe des Album-Covers an (`Palette`-ähnlich aus `Act.art`, Schalter dafür). Optional: Cover dreht sich langsam wie eine Schallplatte.
+4. **Glanzlicht folgt der Neigung:** Neigungssensor (Rotationsvektor) verschiebt die Lichtrichtung `L` im Shader (`GlassShader.kt`), Glanz wandert beim Kippen. Nur ein Uniform mehr, Sensor nur aktiv solange die Island sichtbar ist (Akku).
+5. **Glas-Physik als Inspiration für den Shader:** echtes Brechungsgesetz (`refract` mit Index ~1.46) für Kantennormale und Lichtstrahl, Fresnel-Term (`0.025 + 0.975*(1-n.z)^3`), "Kaustik"-Glanz innen an der Kante, ein heller Streifen, der gelegentlich über die Island läuft (`sweep`). Unser Shader hat schon Brechung des echten Hintergrunds (die Vorlage nicht), das hier wäre nur Feinschliff der Kante.
+6. **Liedtexte im ausgeklappten Player (größer, aber rein additiv):** Suche nach Titel/Künstler/Länge bei LRCLIB (`https://lrclib.net/api/get?...`, danach `/api/search`), Zeitstempel-Zeilen (LRC), aktuelle Zeile wird beim Singen weiß ausgefüllt. Braucht Internet-Berechtigung (aktuell keine im Manifest!) und sollte abschaltbar sein; nur Titel und Künstler werden gesendet. Erst nach 1-5.
+7. **Auf Nachrichten antworten** direkt in der Island (Tastatureingabe, `RemoteInput` der Benachrichtigung) und "Als gelesen markieren". Prüfen, ob das mit dem Overlay-Fenster (nicht fokussierbar) überhaupt eine Tastatur zeigen kann, sonst weglassen.
+8. **Ausblenden bei Spielen/Videos** (Vollbild erkennen) und **Ausblenden auf dem Sperrbildschirm**.
+9. **Elastizität in Stufen** (kein / leicht / mittel / stark) statt nur Regler, bei uns schon über `wobble` angelegt, nur Voreinstellungen.
+10. **Benachrichtigungsverlauf** und Regeln pro App (immer / nie / nur laute), falls später gewünscht.
+
+**AUSDRÜCKLICH NICHT GEWÜNSCHT (Nutzer):** Dauer-an-Island, also eine Kapsel, die immer sichtbar ist und auf die man tippt, um z. B. Taschenlampe, Ton-/Ruhemodus, Nicht-stören oder Uhr/Batterie im Leerlauf zu bedienen (in der Vorlage: Taschenlampen-Regler, "Modus"-Knöpfe, Uhr im ausgeklappten Leerlauf, "Tippen auf leere Island", Kachel in den Schnelleinstellungen). Die Island erscheint bei uns nur, wenn es etwas anzuzeigen gibt. Ebenfalls nicht nötig: Zahlungs-/NFC-Anzeige, Navigation, Shizuku, Auto-Update über GitHub.
+
 ## Wer arbeitet woran
 | Claude | Dateien / Thema | Seit |
 |---|---|---|
 | Claude A (ursprüngliche Sitzung) | Wackler-Bug: `Ui.kt` (Drag/Größen-Animation), `IslandA11y.kt` (Fenster) | 2026-11-27 |
-| Claude B | (bitte eintragen) | |
+| Claude B | nur `CLAUDE.md` (Ideen-Liste), kein Code | 2026-11-28 |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-28 Claude B: Nur CLAUDE.md: Ideen-Liste aus der Fremd-APK ergänzt (Wischen = Lied vor/zurück zuerst; Dauer-an-Island ausdrücklich NICHT gewünscht). Kein Code geändert.
 - 2026-11-28 Claude A: Log vom Gerät: Uhr-TIMER OK (cv: chrono=true down=true, Tasten gefunden: Neu, Pausieren). STOPPUHR: Meldung "Stoppuhr | Zeitverhalten", cv: keine (keine eigene Ansicht, keine Zeit) -> neue Heuristik `stopwatchFromWhen` (n.when = Start). Log zeigt jetzt when/sub/info/keys für Uhr-Pakete. Falls Zeit falsch: Log prüfen.
 - 2026-11-28 Claude A: Glas-Feinschliff: glatteres Weichzeichnen (13 Taps), dunklerer Tint, mehr Deckkraft-Gewicht.
 - 2026-11-28 Claude A: Schritt 3 Hintergrundfoto wird beim App-Wechsel erneuert (refreshBackdrop).
