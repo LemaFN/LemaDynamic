@@ -192,7 +192,7 @@ class Notifs : NotificationListenerService() {
     private fun niceBtn(raw: String, alt: String): Pair<String, Int>? {
         val x = raw.lowercase()
         return when {
-            Regex("pause").containsMatchIn(x) -> "Pause" to 0
+            Regex("pausier|pause").containsMatchIn(x) -> "Pause" to 0
             Regex("resume|continue|weiter|fortsetz|play|start").containsMatchIn(x) -> "Weiter" to 1
             Regex("delete|lösch|loesch|cancel|abbrech|dismiss|close|remove|clear").containsMatchIn(x) -> "Löschen" to 2
             Regex("stop").containsMatchIn(x) -> "Stopp" to 2
@@ -265,6 +265,19 @@ class Notifs : NotificationListenerService() {
         return null
     }
 
+    /**
+     * Stoppuhr der Uhr-App ohne eigene Ansicht: In der Meldung steht keine Zeit, aber ihr Zeitstempel (when)
+     * ist der Startzeitpunkt. Daraus wird die laufende Zeit berechnet.
+     */
+    private fun stopwatchFromWhen(s: StatusBarNotification): Cv? {
+        val n = s.notification
+        val t = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return null
+        if (!Regex("(?i)(stoppuhr|stopwatch)").containsMatchIn(t)) return null
+        val age = System.currentTimeMillis() - n.`when`
+        if (n.`when` <= 0 || age < 0 || age > 24L * 3600_000) return null
+        return Cv(emptyList(), SystemClock.elapsedRealtime() - age, false, true, true)
+    }
+
     private class CT(val s: StatusBarNotification, val cv: Cv)
     private val customs = HashMap<String, CT>()
 
@@ -280,7 +293,8 @@ class Notifs : NotificationListenerService() {
             val icon = try { packageManager.getApplicationIcon(ct.s.packageName).toBitmap(64, 64) } catch (_: Exception) { null }
             val a = ct.s.notification.actions.orEmpty()
             val ctl = if (cv.btns.isNotEmpty()) cv.btns.take(3).map { (l, t, view) -> Btn(l, t) { try { view.performClick() } catch (_: Throwable) {} } }
-            else a.take(3).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }
+            else if (a.isNotEmpty()) a.take(3).mapIndexed { i, x -> Btn(x.title?.toString() ?: "", if (i == 0) 2 else 0) { go(x.actionIntent) } }
+            else listOf(Btn("Öffnen") { go(ct.s.notification.contentIntent) })
             val nt = ct.s.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() }
             Hub.post(Act("tm:$k", "timer", nt ?: if (cv.hasChrono && cv.down) "Timer" else if (cv.hasChrono) "Stoppuhr" else "Timer", text, art = icon, pkg = ct.s.packageName, ctl = ctl))
         }
@@ -312,6 +326,7 @@ class Notifs : NotificationListenerService() {
             val cv = inspectViews(s)
             cvInfo = if (cv == null) " | cv: keine" else " | cv: chrono=${cv.hasChrono} down=${cv.down} run=${cv.running} texts=${cv.texts.take(5)} tasten=${cv.btns.map { it.first }}"
         }
+        if (clockHint.containsMatchIn(s.packageName)) cvInfo += " when=${(System.currentTimeMillis() - n.`when`) / 1000}s sub=${ex.getCharSequence(Notification.EXTRA_SUB_TEXT)} info=${ex.getCharSequence(Notification.EXTRA_INFO_TEXT)} keys=${ex.keySet().map { it.substringAfterLast('.') }.take(14)}"
         NLog.add("${s.packageName.substringAfterLast('.')} cat=${n.category ?: "-"} tpl=$tpl acts=${n.actions?.size ?: 0}$f | $ti | $tx$cvInfo")
     }
 
@@ -326,7 +341,7 @@ class Notifs : NotificationListenerService() {
         if (clockHint.containsMatchIn(s.packageName) && n.flags and Notification.FLAG_ONGOING_EVENT != 0 && n.category != Notification.CATEGORY_ALARM &&
             !timeAny.containsMatchIn("${ex.getCharSequence(Notification.EXTRA_TITLE)} ${ex.getCharSequence(Notification.EXTRA_TEXT)}")) {
             // Timer/Stoppuhr der Uhr-App: Zeit steckt in einer eigenen Ansicht, nicht in Titel/Text
-            val cv = inspectViews(s)
+            val cv = inspectViews(s) ?: stopwatchFromWhen(s)
             if (cv != null) { customs[s.key] = CT(s, cv); customTick(); return }
         }
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return

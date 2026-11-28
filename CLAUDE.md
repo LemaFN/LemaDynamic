@@ -50,6 +50,7 @@ Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canT
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-28 Claude A: Log vom Gerät: Uhr-TIMER OK (cv: chrono=true down=true, Tasten gefunden: Neu, Pausieren). STOPPUHR: Meldung "Stoppuhr | Zeitverhalten", cv: keine (keine eigene Ansicht, keine Zeit) -> neue Heuristik `stopwatchFromWhen` (n.when = Start). Log zeigt jetzt when/sub/info/keys für Uhr-Pakete. Falls Zeit falsch: Log prüfen.
 - 2026-11-28 Claude A: Glas-Feinschliff: glatteres Weichzeichnen (13 Taps), dunklerer Tint, mehr Deckkraft-Gewicht.
 - 2026-11-28 Claude A: Schritt 3 Hintergrundfoto wird beim App-Wechsel erneuert (refreshBackdrop).
 - 2026-11-28 Claude A: Schritt 2 Shader mit Hintergrundfoto (Brechung, Farbsäume, Unschärfe), Regler "Stärke der Brechung".
