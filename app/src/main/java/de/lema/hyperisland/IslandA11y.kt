@@ -215,7 +215,14 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
                                 val rr = minOf(sw.width, wl + winW); val bb = minOf(sw.height, wt + winH)
                                 if (rr - l > 8 && bb - t > 8) {
                                     val crop = Bitmap.createBitmap(sw, l, t, rr - l, bb - t)
-                                    val small = Bitmap.createScaledBitmap(crop, maxOf(8, (crop.width * Backdrop.SCALE).toInt()), maxOf(8, (crop.height * Backdrop.SCALE).toInt()), true)
+                                    // Schrittweise halbieren (jeder Schritt mittelt 2x2 Pixel): ergibt ein glattes, weichgezeichnetes Foto ohne Raster
+                                    var small = crop
+                                    while (small.width > 160 && small.height >= 32) {
+                                        val nx = Bitmap.createScaledBitmap(small, small.width / 2, small.height / 2, true)
+                                        if (small !== crop) small.recycle()
+                                        small = nx
+                                    }
+                                    Backdrop.scale = small.width.toFloat() / crop.width.toFloat()
                                     if (small !== crop) crop.recycle()
                                     Backdrop.cropX = l - wl; Backdrop.cropY = t - wt
                                     Backdrop.bmp = small

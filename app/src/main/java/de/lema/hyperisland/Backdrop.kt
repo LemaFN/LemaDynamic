@@ -15,7 +15,8 @@ import androidx.compose.runtime.setValue
 object Backdrop {
     /** Ausschnitt = das Island-Fenster, verkleinert um SCALE. */
     @Volatile var bmp: Bitmap? = null
-    const val SCALE = 0.4f
+    /** Fotopixel pro Fensterpixel (ergibt sich aus dem stark verkleinerten, dadurch glatt weichgezeichneten Foto). */
+    @Volatile var scale = 0.125f
     /** Versatz des Ausschnitts im Fenster (Pixel), falls das Fenster über den Bildschirmrand ragt. */
     @Volatile var cropX = 0
     @Volatile var cropY = 0

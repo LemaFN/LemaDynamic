@@ -67,8 +67,10 @@ Nur NOTIZEN, noch nichts gebaut. Nur Ideen übernehmen, keinen Code kopieren (Li
 |---|---|---|
 | Claude A (ursprüngliche Sitzung) | Wackler-Bug: `Ui.kt` (Drag/Größen-Animation), `IslandA11y.kt` (Fenster) | 2026-11-27 |
 | Claude B | nur `CLAUDE.md` (Ideen-Liste), kein Code | 2026-11-28 |
+| Claude A (Fortsetzung 2026-11-28 abends) | `GlassShader.kt`, `Backdrop.kt`, `grab()` in `IslandA11y.kt` (Glasqualität); danach Idee 1 (Wischen = Lied) in `IslandA11y.kt`/`Ui.kt`/`Hub.kt`/`Notifs.kt`/`Cfg.kt` | 2026-11-28 |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-28 Claude A: Nutzer: Foto-Glas "schrecklich" (Screenshot: körnig/verwackelt). Ursache: BitmapShader nutzte nächsten Pixel statt linearer Filterung + wenige Taps. Fix: Foto wird schrittweise halbiert (glatt, ~1/8), `FILTER_MODE_LINEAR`, nur 5 Taps/Kanal, kleinere Brechung. `Backdrop.scale` ist jetzt variabel (kein SCALE mehr).
 - 2026-11-28 Claude B: Nur CLAUDE.md: Ideen-Liste aus der Fremd-APK ergänzt (Wischen = Lied vor/zurück zuerst; Dauer-an-Island ausdrücklich NICHT gewünscht). Kein Code geändert.
 - 2026-11-28 Claude A: Log vom Gerät: Uhr-TIMER OK (cv: chrono=true down=true, Tasten gefunden: Neu, Pausieren). STOPPUHR: Meldung "Stoppuhr | Zeitverhalten", cv: keine (keine eigene Ansicht, keine Zeit) -> neue Heuristik `stopwatchFromWhen` (n.when = Start). Log zeigt jetzt when/sub/info/keys für Uhr-Pakete. Falls Zeit falsch: Log prüfen.
 - 2026-11-28 Claude A: Glas-Feinschliff: glatteres Weichzeichnen (13 Taps), dunklerer Tint, mehr Deckkraft-Gewicht.

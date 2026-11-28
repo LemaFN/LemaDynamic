@@ -34,15 +34,13 @@ float sdBox(float2 p, float2 b, float r) {
 
 float3 bgAt(float2 q) { return bg.eval(q * iBgS + iBgOff).rgb; }
 
-// Weichzeichnen: Mitte + zwei gegeneinander gedrehte Ringe (glatter, ohne Geisterbilder)
+// Das Foto ist schon stark verkleinert (= weichgezeichnet); hier nur noch ein kleines Kreuz gegen Rasterung
 float3 bgBlur(float2 q, float r) {
-    float3 c = bgAt(q) * 0.16;
-    for (int i = 0; i < 6; i++) {
-        float a = 1.0471976 * float(i);
-        c += bgAt(q + float2(cos(a), sin(a)) * r * 0.55) * 0.09;
-        float b = a + 0.5235988;
-        c += bgAt(q + float2(cos(b), sin(b)) * r) * 0.05;
-    }
+    float3 c = bgAt(q) * 0.40;
+    c += bgAt(q + float2(r, 0.0)) * 0.15;
+    c += bgAt(q - float2(r, 0.0)) * 0.15;
+    c += bgAt(q + float2(0.0, r)) * 0.15;
+    c += bgAt(q - float2(0.0, r)) * 0.15;
     return c;
 }
 
@@ -83,11 +81,11 @@ half4 main(float2 fc) {
     if (iBg > 0.5) {
         // Lichtbrechung: am Rand wird der Hintergrund nach innen gestaucht, die Farbkanäle brechen verschieden stark
         float w = 11.0 * iDp;
-        float bend = iRefr * 16.0 * iDp * pow(1.0 - clamp(e / w, 0.0, 1.0), 2.0);
-        float blurR = (5.0 + 7.0 * iFrost) * iDp * iRefr;
+        float bend = iRefr * 12.0 * iDp * pow(1.0 - clamp(e / w, 0.0, 1.0), 2.0);
+        float blurR = (2.0 + 3.0 * iFrost) * iDp * iRefr;
         float2 dR = n * bend * 1.00;
-        float2 dG = n * bend * 1.10;
-        float2 dB = n * bend * 1.22;
+        float2 dG = n * bend * 1.07;
+        float2 dB = n * bend * 1.15;
         float3 gl = float3(bgBlur(fc + dR, blurR).r, bgBlur(fc + dG, blurR).g, bgBlur(fc + dB, blurR).b);
         // etwas kräftigere Farben wie bei Glas, leicht abgedunkelt damit Inhalt lesbar bleibt
         float lum = dot(gl, float3(0.299, 0.587, 0.114));
@@ -164,11 +162,13 @@ half4 main(float2 fc) {
             if (src !== lastBmp) {
                 lastBmp = src
                 lastBs = android.graphics.BitmapShader(src, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+                // Ohne lineare Filterung wirkt das Foto körnig/rasterig (Standard ist "nächster Pixel")
+                lastBs!!.setFilterMode(android.graphics.BitmapShader.FILTER_MODE_LINEAR)
             }
             s.setInputShader("bg", lastBs!!)
             s.setFloatUniform("iBg", if (b != null) 1f else 0f)
-            s.setFloatUniform("iBgOff", (pos.x - Backdrop.cropX) * Backdrop.SCALE, (pos.y - Backdrop.cropY) * Backdrop.SCALE)
-            s.setFloatUniform("iBgS", Backdrop.SCALE)
+            s.setFloatUniform("iBgOff", (pos.x - Backdrop.cropX) * Backdrop.scale, (pos.y - Backdrop.cropY) * Backdrop.scale)
+            s.setFloatUniform("iBgS", Backdrop.scale)
             s.setFloatUniform("iRefr", refr)
             scope.drawRect(ShaderBrush(s))
             if (status != "aktiv") status = "aktiv"
