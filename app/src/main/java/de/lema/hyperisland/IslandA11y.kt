@@ -417,7 +417,36 @@ class IslandA11y : AccessibilityService(), LifecycleOwner, SavedStateRegistryOwn
         if (e.className?.startsWith("android.inputmethodservice") == true) return
         val p = e.packageName?.toString() ?: return
         if (p == packageName || p == "android" || p.contains("systemui")) return
+        val before = fg
         if (p == homePkg()) { fg?.let { Hub.pull(it) }; fg = null } else fg = p
+        if (fg != before) refreshBackdrop()
+    }
+
+    private var refreshJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Beim App-Wechsel das Hintergrundfoto erneuern, wenn die Island gerade sichtbar ist.
+     * Dafür ist das Fenster für ca. 0,15 s unsichtbar, damit sich die Island nicht selbst fotografiert.
+     */
+    private fun refreshBackdrop() {
+        val v = view ?: return
+        val c = Cfg.v.value
+        if (!shown || !Backdrop.enabled() || c.blur > 0f) return
+        if (android.os.SystemClock.elapsedRealtime() - Backdrop.lastAt < 3000) return
+        refreshJob?.cancel()
+        refreshJob = scope.launch {
+            try {
+                delay(400) // Der App-Wechsel-Effekt soll fertig sein
+                lp.alpha = 0f
+                try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+                delay(130)
+                val d = resources.displayMetrics.density
+                kotlinx.coroutines.withTimeoutOrNull(600) { grab(((maxOf(344f, c.compactW) * c.scale + 88) * d).toInt(), ((EXP_MAX_H * c.scale + 56) * d).toInt()) }
+            } finally {
+                lp.alpha = 1f
+                try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+            }
+        }
     }
 
     override fun onInterrupt() {}

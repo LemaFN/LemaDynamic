@@ -40,7 +40,7 @@ Fertig: Glas-Look mit Shader, Musik/Timer/Nachrichten/Anrufe/Laden/Bluetooth, Ei
 Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canTakeScreenshot="true"` in `res/xml/a11y.xml`) den Bildschirm lesen, ohne MediaProjection-Dialog. Schritte:
 1. [erledigt, ungetestet] `Backdrop.kt` (Bitmap des Ausschnitts hinter dem Fenster, Skalierung 0.4), `grab()` in `IslandA11y.kt` (Foto beim ERSCHEINEN, solange das Fenster noch 1x1 ist; Ui wartet per `Backdrop.pending` max. 0,7 s), Schalter "Echter Hintergrund" (`Config.backdrop`), Diagnose-Zeile "Hintergrundfoto". Evtl. muss der Nutzer die Bedienungshilfe einmal aus-/einschalten, damit die neue Erlaubnis gilt.
 2. [erledigt, ungetestet] AGSL-Shader (`GlassShader.kt`; `Glass.draw(... bgBmp, pos, refr)`, Regler `refrStrength`; bei Foto Deckkraft-Mischung `pow(opacity,1.7)`, Alpha 1): Hintergrund als `uniform shader bg` (BitmapShader), Weichzeichnen (mehrere Taps), Brechung entlang der Kante (SDF-Normale), Farbsäume, Tönung; Position der Island im Fenster per `onGloballyPositioned`.
-3. [offen] Foto auch beim App-Wechsel erneuern (Fenster dafür kurz alpha 0, damit sich die Island nicht selbst fotografiert).
+3. [erledigt, ungetestet; Nutzer soll prüfen ob das Fenster beim App-Wechsel kurz flackert] Foto auch beim App-Wechsel erneuern (`refreshBackdrop()`, Fenster ~130 ms alpha 0) (Fenster dafür kurz alpha 0, damit sich die Island nicht selbst fotografiert).
 4. [offen] Feintuning (Stärke-Regler für Brechung/Blur), Fallback wenn kein Foto.
 
 ## Wer arbeitet woran
@@ -50,6 +50,7 @@ Idee: Der AccessibilityService darf per `takeScreenshot` (API 30+, `android:canT
 | Claude B | (bitte eintragen) | |
 
 ## Log (neueste oben, eine Zeile pro Änderung)
+- 2026-11-28 Claude A: Schritt 3 Hintergrundfoto wird beim App-Wechsel erneuert (refreshBackdrop).
 - 2026-11-28 Claude A: Schritt 2 Shader mit Hintergrundfoto (Brechung, Farbsäume, Unschärfe), Regler "Stärke der Brechung".
 - 2026-11-28 Claude A: Schritt 1 Bildschirmfoto-Grundlage (Backdrop.kt, grab(), a11y.xml canTakeScreenshot, Schalter, Diagnose).
 - 2026-11-27 Claude A: Bluetooth bestätigt im Log ("BT Audio verbunden name=JBL Flip 5"); Anzeige klappt jetzt automatisch auf (Kind bt wie msg/call).
