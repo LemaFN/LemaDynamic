@@ -16,6 +16,7 @@ data class Config(
     val offY: Float = 0f,               // Verschiebung nach unten (dp)
     val compactW: Float = 236f,         // Breite eingeklappt (dp)
     val holdSec: Float = 6f,            // so lange bleibt die Island aufgeklappt
+    val refrStrength: Float = 1f,       // Stärke der Brechung und Unschärfe mit Hintergrundfoto
     val backdrop: Boolean = true,       // echter Hintergrund per Bildschirmfoto (Lichtbrechung, Android 11+)
     val refract: Boolean = true,        // Glas-Shader mit Rand-Lichtbrechung (Android 13+)
     val blur: Float = 0f,               // Hintergrund-Blur in px (0 = aus, nur Android 12+, experimentell)
@@ -65,6 +66,7 @@ object Cfg {
             blur = p.getFloat("blur", d.blur),
             refract = p.getBoolean("refract", d.refract),
             backdrop = p.getBoolean("backdrop", d.backdrop),
+            refrStrength = p.getFloat("refrStrength", d.refrStrength),
             showMsg = p.getBoolean("showMsg", d.showMsg),
             showMusic = p.getBoolean("showMusic", d.showMusic),
             showTimer = p.getBoolean("showTimer", d.showTimer),
@@ -89,7 +91,7 @@ object Cfg {
             .putFloat("compactW", n.compactW).putFloat("holdSec", n.holdSec).putFloat("blur", n.blur)
             .putBoolean("showMsg", n.showMsg).putBoolean("showMusic", n.showMusic).putBoolean("showTimer", n.showTimer)
             .putBoolean("showCall", n.showCall).putBoolean("showCharge", n.showCharge).putBoolean("showBt", n.showBt).putBoolean("pull", n.pull)
-            .putBoolean("haptic", n.haptic).putBoolean("hideLandscape", n.hideLandscape).putBoolean("privacy", n.privacy).putBoolean("refract", n.refract).putBoolean("backdrop", n.backdrop)
+            .putBoolean("haptic", n.haptic).putBoolean("hideLandscape", n.hideLandscape).putBoolean("privacy", n.privacy).putBoolean("refract", n.refract).putBoolean("backdrop", n.backdrop).putFloat("refrStrength", n.refrStrength)
             .apply()
     }
 

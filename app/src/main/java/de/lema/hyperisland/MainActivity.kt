@@ -112,6 +112,7 @@ fun Home() {
 
         Sec("Glas") {
             Sw("Echter Hintergrund / Lichtbrechung (Bildschirmfoto, Android 11+)", cfg.backdrop) { v -> set { it.copy(backdrop = v) } }
+            Sl("Stärke der Brechung / Unschärfe", cfg.refrStrength, 0f, 2f, { "${(it * 100).toInt()} %" }) { v -> set { it.copy(refrStrength = v) } }
             Sw("Lichtbrechung am Rand (Glas-Shader, Android 13+)", cfg.refract) { v -> set { it.copy(refract = v) } }
             Sl("Durchsichtigkeit (aufgeklappt)", 1f - cfg.opacity, 0f, 0.65f, { "${(it * 100).toInt()} %" }) { v -> set { it.copy(opacity = 1f - v) } }
             Sl("Durchsichtigkeit (eingeklappt)", 1f - cfg.compactOpacity, 0f, 0.5f, { "${(it * 100).toInt()} %" }) { v -> set { it.copy(compactOpacity = 1f - v) } }

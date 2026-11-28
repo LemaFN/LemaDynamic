@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -247,7 +248,10 @@ private fun IslandBody(cfg: Config) {
                     val g = glass.value
                     val base = cfg.compactOpacity + (cfg.opacity - cfg.compactOpacity) * g
                     // Bevorzugt: Glas-Shader mit Rand-Lichtbrechung; sonst unten das Schichten-Fallback
-                    if (cfg.refract && Glass.draw(this, shader, minOf(size.height / 2f, cfg.corner.dp.toPx()), c, cfg.glow, g, base, cfg.frost)) return@drawBehind
+                    val bgVer = Backdrop.ver // Lesen löst Neuzeichnen aus, sobald ein neues Hintergrundfoto da ist
+                    val bgBmp = if (cfg.backdrop && bgVer >= 0) Backdrop.bmp else null
+                    val pos = nodeC?.positionInWindow() ?: Offset.Zero
+                    if (cfg.refract && Glass.draw(this, shader, minOf(size.height / 2f, cfg.corner.dp.toPx()), c, cfg.glow, g, base, cfg.frost, bgBmp, pos, cfg.refrStrength)) return@drawBehind
                     // 1) getönte Glasfläche
                     drawRect(Brush.verticalGradient(listOf(Color(0xFF24242E).copy(alpha = base), Color(0xFF06060A).copy(alpha = base))))
                     // 2) Farbschimmer der Aktivität von unten

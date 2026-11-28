@@ -21,10 +21,27 @@ uniform float4 iAccent;
 uniform float iAmt;
 uniform float iFrost;
 uniform float iAlpha;
+uniform shader bg;      // Foto des Hintergrunds hinter der Island
+uniform float iBg;      // 1 = Foto vorhanden
+uniform float2 iBgOff;  // Versatz Island -> Foto (Fotopixel)
+uniform float iBgS;     // Fotopixel pro Island-Pixel
+uniform float iRefr;    // Stärke der Brechung/Unschärfe
 
 float sdBox(float2 p, float2 b, float r) {
     float2 q = abs(p) - b + float2(r, r);
     return min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0, 0.0))) - r;
+}
+
+float3 bgAt(float2 q) { return bg.eval(q * iBgS + iBgOff).rgb; }
+
+// Weichzeichnen: Mitte + Ring aus 6 Punkten
+float3 bgBlur(float2 q, float r) {
+    float3 c = bgAt(q) * 0.25;
+    for (int i = 0; i < 6; i++) {
+        float a = 1.0471976 * float(i);
+        c += bgAt(q + float2(cos(a), sin(a)) * r) * 0.125;
+    }
+    return c;
 }
 
 half4 main(float2 fc) {
@@ -60,6 +77,23 @@ half4 main(float2 fc) {
     base += iAccent.rgb * (0.30 * iAccent.a * iAmt) * smoothstep(0.35, 1.0, t);
     base = mix(base, float3(0.86, 0.89, 0.95), iFrost * 0.22);
 
+    float aBase = iAlpha;
+    if (iBg > 0.5) {
+        // Lichtbrechung: am Rand wird der Hintergrund nach innen gestaucht, die Farbkanäle brechen verschieden stark
+        float w = 11.0 * iDp;
+        float bend = iRefr * 16.0 * iDp * pow(1.0 - clamp(e / w, 0.0, 1.0), 2.0);
+        float blurR = (3.0 + 5.0 * iFrost) * iDp * iRefr;
+        float2 dR = n * bend * 1.00;
+        float2 dG = n * bend * 1.10;
+        float2 dB = n * bend * 1.22;
+        float3 gl = float3(bgBlur(fc + dR, blurR).r, bgBlur(fc + dG, blurR).g, bgBlur(fc + dB, blurR).b);
+        // etwas kräftigere Farben wie bei Glas, leicht abgedunkelt damit Inhalt lesbar bleibt
+        float lum = dot(gl, float3(0.299, 0.587, 0.114));
+        gl = mix(float3(lum, lum, lum), gl, 1.25) * 0.78;
+        base = mix(gl, base, pow(clamp(iAlpha, 0.0, 1.0), 1.7));
+        aBase = 1.0;
+    }
+
     // Innere Linse: Licht sammelt sich zum Rand hin
     float innerGlow = exp(-e / (14.0 * iDp));
     base += float3(0.90, 0.93, 1.00) * innerGlow * 0.07;
@@ -79,7 +113,7 @@ half4 main(float2 fc) {
     col = col * (1.0 - bevel * backFace * 0.35);
     col = clamp(col, 0.0, 1.0);
 
-    float a = clamp(iAlpha + bevel * spec * 0.55 + ring * 0.20 + topLine * 0.40, 0.0, 1.0);
+    float a = clamp(aBase + bevel * spec * 0.55 + ring * 0.20 + topLine * 0.40, 0.0, 1.0);
     float m = clamp(0.5 - d, 0.0, 1.0);
     return half4(half3(col * a), half(a)) * half(m);
 }
@@ -105,7 +139,14 @@ half4 main(float2 fc) {
     }
 
     /** true = mit Shader gezeichnet, false = Aufrufer soll sein Fallback zeichnen. */
-    fun draw(scope: DrawScope, shader: Any?, radius: Float, accent: Color, glow: Float, amt: Float, alpha: Float, frost: Float): Boolean {
+    private var lastBmp: android.graphics.Bitmap? = null
+    private var lastBs: android.graphics.BitmapShader? = null
+    private val dummy by lazy { android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888) }
+
+    fun draw(
+        scope: DrawScope, shader: Any?, radius: Float, accent: Color, glow: Float, amt: Float, alpha: Float, frost: Float,
+        bgBmp: android.graphics.Bitmap? = null, pos: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero, refr: Float = 1f
+    ): Boolean {
         if (shader == null || broken || Build.VERSION.SDK_INT < 33) return false
         return try {
             val s = shader as RuntimeShader
@@ -116,6 +157,17 @@ half4 main(float2 fc) {
             s.setFloatUniform("iAmt", amt)
             s.setFloatUniform("iFrost", frost)
             s.setFloatUniform("iAlpha", alpha)
+            val b = bgBmp?.takeIf { !it.isRecycled }
+            val src = b ?: dummy
+            if (src !== lastBmp) {
+                lastBmp = src
+                lastBs = android.graphics.BitmapShader(src, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+            }
+            s.setInputShader("bg", lastBs!!)
+            s.setFloatUniform("iBg", if (b != null) 1f else 0f)
+            s.setFloatUniform("iBgOff", (pos.x - Backdrop.cropX) * Backdrop.SCALE, (pos.y - Backdrop.cropY) * Backdrop.SCALE)
+            s.setFloatUniform("iBgS", Backdrop.SCALE)
+            s.setFloatUniform("iRefr", refr)
             scope.drawRect(ShaderBrush(s))
             if (status != "aktiv") status = "aktiv"
             true
